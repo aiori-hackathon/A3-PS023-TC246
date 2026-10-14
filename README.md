@@ -1,5 +1,7 @@
 # PS-023: Minimal Two-Node Cloud Hypervisor VM Controller
 
+**Project Video:** [Watch the PS-023 project explanation on YouTube](https://youtu.be/2IhxcSRknVc)
+
 **Team:** The Mavericks  
 **Team Code:** `A3-PS023-TC246`  
 **Project:** A minimal centralized virtual machine controller for two KVM-capable Linux hosts.
@@ -10,6 +12,7 @@
 
 ## Table of Contents
 
+- [Project Video](#project-video)
 - [1. Project Overview](#1-project-overview)
 - [2. Problem Statement](#2-problem-statement)
 - [3. Objectives](#3-objectives)
@@ -33,6 +36,12 @@
 - [21. Troubleshooting](#21-troubleshooting)
 - [22. Contributing](#22-contributing)
 - [23. References](#23-references)
+
+---
+
+## Project Video
+
+Watch the project explanation and walkthrough: [https://youtu.be/2IhxcSRknVc](https://youtu.be/2IhxcSRknVc)
 
 ---
 
