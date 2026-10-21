@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.db
+*.bak*
+.venv/
+*.raw
+*.img
+*.log
+*.sock*
+.env
