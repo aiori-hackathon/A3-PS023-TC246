@@ -47,10 +47,14 @@ def node_views(path=None, down=()):
 def create_vm(name, vcpus, memory_mb, disk_gb=4, path=None):
     ns.poll_all(path)
     down = set()  # nodes that failed during this request
+    refused = {}  # node id -> why it failed, so the final error can say so
     while True:
         with _place_lock:
             decision = place(node_views(path, down), memory_mb)
             if decision.selected is None:
+                if refused:
+                    decision.reason = "no node accepted the VM: " + "; ".join(
+                        f"{n}: {r}" for n, r in refused.items())
                 db.record_decision(decision, None, path)
                 raise NoCapacity(decision)
             node = db.get_node(decision.selected, path)
@@ -66,11 +70,13 @@ def create_vm(name, vcpus, memory_mb, disk_gb=4, path=None):
             # The row is dropped here; a later reconcile step removes orphans.
             db.delete_vm(vm_id, path)
             db.update_node(node["id"], path, status="UNHEALTHY")
+            refused[node["id"]] = "unreachable"
             down.add(node["id"])
             continue
         except WorkerError as e:
             db.delete_vm(vm_id, path)
-            if e.status == 409:  # worker refused for capacity: try another node
+            if e.status == 409:  # worker refused: try another node
+                refused[node["id"]] = str(e.detail)
                 down.add(node["id"])
                 continue
             raise WorkerRejected(e.status, e.detail) from e

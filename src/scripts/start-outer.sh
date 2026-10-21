@@ -9,7 +9,7 @@ setsid cloud-hypervisor \
   --api-socket path=$D/outer.sock \
   --cpus boot=4,nested=on \
   --memory size=4G \
-  --kernel $HOME/ps023/lab/kernel/vmlinux.bin \
+  --kernel $HOME/ps023/lab/kernel/vmlinux-net.bin \
   --disk path=$D/disk.raw,image_type=raw \
   --disk path=$D/seed.img,image_type=raw,readonly=on \
   --net tap=tapvm7,mac=12:34:56:78:90:17 \
