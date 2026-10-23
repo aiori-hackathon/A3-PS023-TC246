@@ -8,3 +8,4 @@ __pycache__/
 *.log
 *.sock*
 .env
+secrets.env

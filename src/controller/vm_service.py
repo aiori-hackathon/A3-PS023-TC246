@@ -51,6 +51,11 @@ def create_vm(name, vcpus, memory_mb, disk_gb=4, path=None):
     while True:
         with _place_lock:
             decision = place(node_views(path, down), memory_mb)
+            for c in decision.candidates:
+                why = refused.get(c["node_id"])
+                if why:
+                    c["verdict"] = "refused: " + why
+                    c["healthy"] = why != "unreachable"
             if decision.selected is None:
                 if refused:
                     decision.reason = "no node accepted the VM: " + "; ".join(
