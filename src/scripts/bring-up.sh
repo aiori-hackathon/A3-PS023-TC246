@@ -65,7 +65,7 @@ sleep 1
 )
 (
   cd "$P/controller" &&
-  export PS023_API_TOKEN PS023_TOKEN_NODE_A PS023_TOKEN_NODE_B PS023_NODES="node-a=http://127.0.0.1:8001,node-b=http://$NODEB:8002"
+  export PS023_VM_PASSWORD PS023_API_TOKEN PS023_TOKEN_NODE_A PS023_TOKEN_NODE_B PS023_NODES="node-a=http://127.0.0.1:8001,node-b=http://$NODEB:8002"
   setsid "$VENV/uvicorn" main:app --host 127.0.0.1 --port 8000 >> "$LOG/controller.log" 2>&1 < /dev/null &
 )
 for i in $(seq 1 30); do up http://127.0.0.1:8001/health node-a && up http://127.0.0.1:8000/health ok && break; sleep 1; done

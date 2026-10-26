@@ -167,3 +167,16 @@ def delete_vm(vm_id: VmId):
 @app.get("/decisions", dependencies=auth)
 def decisions(limit: int = 10):
     return db.latest_decisions(max(1, min(limit, 100)))
+
+
+from pathlib import Path  # noqa: E402
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+
+app.mount("/dashboard",
+          StaticFiles(directory=Path(__file__).parent / "dashboard", html=True),
+          name="dashboard")
+
+
+from terminal import router as terminal_router  # noqa: E402
+
+app.include_router(terminal_router)
