@@ -4,10 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PS-023 Dashboard</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.3.0/xterm.min.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.3.0/xterm.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.3.0/xterm.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xterm-addon-fit/0.8.0/xterm-addon-fit.min.js"></script>
+<link rel="stylesheet" href="vendor/xterm.css">
 <style>
 :root { --bg:#f6f7f9; --card:#fff; --text:#1c2330; --muted:#667085; --line:#e3e6eb;
   --ok:#157f3d; --warn:#b54708; --bad:#b42318; --accent:#2457d6; }
@@ -97,17 +94,10 @@ code { font-family:ui-monospace, Menlo, monospace; font-size:13px; }
       <tbody id="decisions"><tr><td colspan="5" class="muted">Connect to load.</td></tr></tbody>
     </table></div>
   </section>
-  <section id="termBox" style="display:none">
-    <div class="row" style="justify-content:space-between">
-      <h2 id="termTitle" style="margin:0">Terminal</h2>
-      <button id="termClose">Close</button>
-    </div>
-    <div id="termScreen" style="height:360px; margin-top:10px; background:#000; padding:6px; border-radius:6px"></div>
-  </section>
 </main>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.3.0/xterm.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xterm-addon-fit/0.8.0/xterm-addon-fit.min.js"></script>
+<script src="vendor/xterm.js"></script>
+<script src="vendor/xterm-addon-fit.js"></script>
 <script>
 "use strict";
 var token = "";
@@ -194,11 +184,6 @@ function renderVms(vms) {
       tb.addEventListener("click", function () { openTerminal(v); });
       act.appendChild(tb);
     }
-    if (v.status === "RUNNING" && v.ip_address) {
-      var tb = el("button", "Terminal");
-      tb.addEventListener("click", function () { openTerminal(v); });
-      act.appendChild(tb);
-    }
     r.appendChild(act); body.appendChild(r);
   });
 }
@@ -242,7 +227,7 @@ function openTerminal(vm) {
   if (typeof Terminal === "undefined" || typeof FitAddon === "undefined") {
     $("termBox").hidden = false;
     $("termMsg").className = "msg err";
-    $("termMsg").textContent = "Terminal library did not load (the page needs internet access for xterm.js).";
+    $("termMsg").textContent = "Terminal library did not load: check that dashboard/vendor/ exists next to index.html.";
     return;
   }
   closeTerminal();
@@ -297,52 +282,6 @@ $("create").addEventListener("submit", function (e) {
     .then(function (v) { m.textContent = "Created " + v.name + " on " + v.node_id + " (" + v.id + ")"; refresh(); })
     .catch(function (err) { m.className = "msg err"; m.textContent = "Create failed: " + err.message; });
 });
-var term = null, termWs = null, termFit = null;
-
-function closeTerminal() {
-  if (termWs) { try { termWs.close(); } catch (e) {} termWs = null; }
-  if (term) { term.dispose(); term = null; }
-  $("termBox").style.display = "none";
-}
-
-function openTerminal(vm) {
-  if (typeof Terminal === "undefined" || typeof FitAddon === "undefined") {
-    alert("The terminal library did not load. The page needs internet access to load xterm.js.");
-    return;
-  }
-  closeTerminal();
-  $("termBox").style.display = "block";
-  $("termTitle").textContent = "Terminal: " + vm.name + " (" + vm.ip_address + ")";
-  term = new Terminal({ cursorBlink: true, fontSize: 14 });
-  termFit = new FitAddon.FitAddon();
-  term.loadAddon(termFit);
-  term.open($("termScreen"));
-  termFit.fit();
-  var scheme = location.protocol === "https:" ? "wss://" : "ws://";
-  var ws = new WebSocket(scheme + location.host + "/vms/" + vm.id + "/terminal");
-  ws.binaryType = "arraybuffer";
-  termWs = ws;
-  ws.onopen = function () {
-    ws.send(JSON.stringify({ type: "auth", token: token, cols: term.cols, rows: term.rows }));
-    term.focus();
-  };
-  ws.onmessage = function (ev) {
-    if (!term) return;
-    term.write(ev.data instanceof ArrayBuffer ? new Uint8Array(ev.data) : String(ev.data));
-  };
-  ws.onclose = function (ev) {
-    if (term) term.write("\r\n[session closed" + (ev.reason ? ": " + ev.reason : "") + "]\r\n");
-  };
-  term.onData(function (d) {
-    if (ws.readyState === 1) ws.send(JSON.stringify({ type: "input", data: d }));
-  });
-  term.onResize(function (s) {
-    if (ws.readyState === 1) ws.send(JSON.stringify({ type: "resize", cols: s.cols, rows: s.rows }));
-  });
-}
-
-window.addEventListener("resize", function () { if (termFit && term) termFit.fit(); });
-$("termClose").addEventListener("click", closeTerminal);
 if (token) connect();
 </script>
 </body>
