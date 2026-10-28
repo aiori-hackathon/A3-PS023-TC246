@@ -1,0 +1,26 @@
+
+=== 1. host network
+bridge and 8 TAP devices ready
+
+=== 2. node-b (nested VM)
+started, pid 10982
+ssh port open after 2s
+Warning: Permanently added '192.168.100.17' (ED25519) to the list of known hosts.
+node-b
+
+=== 3. node-b inner network and worker
+Warning: Permanently added '192.168.100.17' (ED25519) to the list of known hosts.
+worker B ok
+
+=== 4. route to the inner network
+10.77.0.0/24 via 192.168.100.17 dev br-ps023 
+
+=== 5. worker A and controller on the host
+worker A ok
+controller ok
+
+=== 6. cluster state
+nodes: node-a=HEALTHY(9756MB) node-b=HEALTHY(2514MB)
+host VMMs: 1 (1 expected: node-b)
+
+READY. Logs are in /home/rajyavardhan/ps023/logs. Run a test with: bash ~/ps023/with-secrets.sh bash ~/ps023/controller/try_api.sh

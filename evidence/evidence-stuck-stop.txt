@@ -1,0 +1,8 @@
+created vm-03e67547 (worker id vm-41bc1f8b)
+>>> freezing cloud-hypervisor pid 14348 (SIGSTOP): it cannot answer the API
+>>> asking the controller to stop the VM (this takes a while)
+controller answered HTTP 200 after 70s
+{"id":"vm-03e67547","name":"stuck","node_id":"node-a","worker_vm_id":"vm-41bc1f8b","status":"STOPPED","vcpus":1,"memory_mb":512,"disk_gb":4,"ip_address":"192.168.100.10","created_at":1792819278.892721}
+>>> waiting for the worker to finish its cleanup (up to 60 s more)
+process 14348 gone after 70s total
+--- cleanup: 204  (want 204)
