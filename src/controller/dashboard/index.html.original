@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PS-023 Dashboard</title>
+<link rel="stylesheet" href="vendor/xterm.css">
+<style>
+:root { --bg:#f6f7f9; --card:#fff; --text:#1c2330; --muted:#667085; --line:#e3e6eb;
+  --ok:#157f3d; --warn:#b54708; --bad:#b42318; --accent:#2457d6; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg:#0f1319; --card:#171c25; --text:#e6e9ef; --muted:#98a2b3; --line:#283040;
+    --ok:#4cc27d; --warn:#f0a040; --bad:#f06a5f; --accent:#6f97ff; } }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--text);
+  font:15px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; }
+header { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between;
+  padding:14px 16px; border-bottom:1px solid var(--line); background:var(--card); }
+h1 { font-size:18px; margin:0; }
+main { padding:16px; max-width:1100px; margin:0 auto; display:grid; gap:16px; }
+section { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:14px; }
+h2 { font-size:15px; margin:0 0 10px; }
+.row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+input, button { font:inherit; padding:6px 10px; border-radius:6px; border:1px solid var(--line);
+  background:var(--card); color:var(--text); }
+button { cursor:pointer; } button:hover { border-color:var(--accent); }
+button:disabled { opacity:.5; cursor:wait; }
+button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+button.danger:hover { border-color:var(--bad); color:var(--bad); }
+.nodes { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px; }
+.node { border:1px solid var(--line); border-radius:8px; padding:12px; }
+.pill { display:inline-block; padding:1px 8px; border-radius:99px; font-size:12px; font-weight:600;
+  border:1px solid currentColor; }
+.HEALTHY,.RUNNING { color:var(--ok); } .UNHEALTHY,.FAILED { color:var(--bad); }
+.STOPPED,.UNKNOWN,.PENDING { color:var(--warn); }
+.muted { color:var(--muted); font-size:13px; }
+.bar { height:6px; background:var(--line); border-radius:3px; margin:6px 0; overflow:hidden; }
+.bar > i { display:block; height:100%; background:var(--accent); }
+.scroll { overflow-x:auto; }
+table { border-collapse:collapse; width:100%; min-width:640px; }
+th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+th { font-size:12px; color:var(--muted); font-weight:600; }
+.msg { margin-top:8px; font-size:13px; } .msg.err { color:var(--bad); }
+#termScreen { height:380px; background:#000; padding:6px; border-radius:6px; }
+code { font-family:ui-monospace, Menlo, monospace; font-size:13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>PS-023 VM controller</h1>
+  <div class="row">
+    <input id="token" type="password" placeholder="API token" autocomplete="off" size="26">
+    <button id="connect" class="primary">Connect</button>
+    <span id="state" class="muted">not connected</span>
+  </div>
+</header>
+<main>
+  <section><h2>Nodes</h2><div id="nodes" class="nodes muted">Connect to load.</div></section>
+
+  <section>
+    <h2>Create a VM</h2>
+    <form id="create" class="row">
+      <input id="name" placeholder="name (a-z, 0-9, -)" required pattern="[a-z0-9][a-z0-9\-]{0,30}">
+      <input id="vcpus" type="number" min="1" max="8" value="1" title="vCPUs" style="width:80px">
+      <input id="mem" type="number" min="128" max="8192" value="512" title="memory MB" style="width:100px">
+      <input id="disk" type="number" min="1" max="50" value="4" title="disk GB" style="width:80px">
+      <button class="primary" type="submit">Create</button>
+    </form>
+    <div id="createMsg" class="msg muted">vCPUs 1-8, memory 128-8192 MB, disk 1-50 GB.</div>
+  </section>
+
+  <section>
+    <h2>VMs</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>Name</th><th>ID</th><th>Node</th><th>Status</th><th>Resources</th><th>IP</th><th>Actions</th></tr></thead>
+      <tbody id="vms"><tr><td colspan="7" class="muted">Connect to load.</td></tr></tbody>
+    </table></div>
+    <div id="actionMsg" class="msg muted">Stop can take up to about 75 s if a VM is frozen.</div>
+  </section>
+
+  <section id="termBox" hidden>
+    <div class="row" style="justify-content:space-between">
+      <h2 id="termTitle" style="margin:0">Terminal</h2>
+      <button id="termClose">Close</button>
+    </div>
+    <div id="termScreen"></div>
+    <div id="termMsg" class="msg muted">SSH session through the controller. Close it when you are done.</div>
+  </section>
+
+  <section>
+    <h2>Latest placement decisions</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>When</th><th>VM</th><th>Requested</th><th>Chosen</th><th>Candidates</th></tr></thead>
+      <tbody id="decisions"><tr><td colspan="5" class="muted">Connect to load.</td></tr></tbody>
+    </table></div>
+  </section>
+</main>
+
+<script src="vendor/xterm.js"></script>
+<script src="vendor/xterm-addon-fit.js"></script>
+<script>
+"use strict";
+var token = "";
+try { token = sessionStorage.getItem("ps023token") || ""; } catch (e) {}
+var timer = null;
+var $ = function (id) { return document.getElementById(id); };
+
+function el(tag, text, cls) {
+  var n = document.createElement(tag);
+  if (text !== undefined) n.textContent = text;
+  if (cls) n.className = cls;
+  return n;
+}
+function when(sec) { return sec ? new Date(sec * 1000).toLocaleTimeString() : "-"; }
+
+function api(method, path, body) {
+  var opts = { method: method, headers: { "Authorization": "Bearer " + token } };
+  if (body) { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
+  return fetch(path, opts).then(function (r) {
+    if (r.status === 204) return null;
+    return r.json().catch(function () { return {}; }).then(function (data) {
+      if (!r.ok) {
+        var d = data && data.detail;
+        throw new Error(r.status + " " + (typeof d === "string" ? d : JSON.stringify(d || data)));
+      }
+      return data;
+    });
+  });
+}
+
+function renderNodes(nodes) {
+  var box = $("nodes"); box.textContent = ""; box.className = "nodes";
+  nodes.forEach(function (n) {
+    var c = el("div", undefined, "node");
+    var top = el("div"); top.appendChild(el("strong", n.id + " "));
+    top.appendChild(el("span", n.status, "pill " + n.status)); c.appendChild(top);
+    var total = n.memory_total_mb || 0, free = n.memory_schedulable_mb || 0;
+    var bar = el("div", undefined, "bar"), fill = el("i");
+    fill.style.width = total ? Math.max(0, Math.min(100, 100 * free / total)) + "%" : "0%";
+    bar.appendChild(fill); c.appendChild(bar);
+    c.appendChild(el("div", free + " MB schedulable of " + total + " MB"));
+    c.appendChild(el("div", n.cpu_total + " CPUs, " + n.vms_running + " VMs running", "muted"));
+    c.appendChild(el("div", n.url + " - heartbeat " + when(n.last_heartbeat), "muted"));
+    box.appendChild(c);
+  });
+}
+
+function actionBtn(label, vm, path, method, cls) {
+  var b = el("button", label, cls);
+  b.addEventListener("click", function () {
+    if (label === "Delete" && !confirm("Delete " + vm.name + " (" + vm.id + ")?")) return;
+    b.disabled = true; $("actionMsg").className = "msg muted";
+    $("actionMsg").textContent = label + " " + vm.name + " ...";
+    api(method, path).then(function () {
+      $("actionMsg").textContent = label + " " + vm.name + ": done";
+      refresh();
+    }).catch(function (e) {
+      $("actionMsg").className = "msg err"; $("actionMsg").textContent = label + " failed: " + e.message;
+      b.disabled = false;
+    });
+  });
+  return b;
+}
+
+function renderVms(vms) {
+  var body = $("vms"); body.textContent = "";
+  if (!vms.length) {
+    var r0 = el("tr"), td0 = el("td", "No VMs.", "muted"); td0.colSpan = 7; r0.appendChild(td0); body.appendChild(r0); return;
+  }
+  vms.forEach(function (v) {
+    var r = el("tr");
+    r.appendChild(el("td", v.name));
+    r.appendChild(el("td", v.id)); r.lastChild.className = "muted";
+    r.appendChild(el("td", v.node_id));
+    var st = el("td"); st.appendChild(el("span", v.status, "pill " + v.status)); r.appendChild(st);
+    r.appendChild(el("td", v.vcpus + " vCPU, " + v.memory_mb + " MB, " + v.disk_gb + " GB"));
+    r.appendChild(el("td", v.ip_address || "-"));
+    var act = el("td", undefined, "row");
+    act.appendChild(actionBtn("Start", v, "/vms/" + v.id + "/start", "POST"));
+    act.appendChild(actionBtn("Stop", v, "/vms/" + v.id + "/stop", "POST"));
+    act.appendChild(actionBtn("Delete", v, "/vms/" + v.id, "DELETE", "danger"));
+    if (v.status === "RUNNING" && v.ip_address) {
+      var tb = el("button", "Terminal");
+      tb.addEventListener("click", function () { openTerminal(v); });
+      act.appendChild(tb);
+    }
+    r.appendChild(act); body.appendChild(r);
+  });
+}
+
+function renderDecisions(list) {
+  var body = $("decisions"); body.textContent = "";
+  list.forEach(function (d) {
+    var r = el("tr");
+    r.appendChild(el("td", when(d.at)));
+    r.appendChild(el("td", d.vm_id || "(none)"));
+    r.appendChild(el("td", d.requested_mb + " MB"));
+    r.appendChild(el("td", d.selected || "refused"));
+    var td = el("td");
+    d.candidates.forEach(function (c) {
+      td.appendChild(el("div", c.node_id + ": " + c.available_mb + " MB, " + c.verdict, "muted"));
+    });
+    if (!d.selected) td.appendChild(el("div", d.reason));
+    r.appendChild(td); body.appendChild(r);
+  });
+}
+
+function refresh() {
+  return Promise.all([api("GET", "/nodes"), api("GET", "/vms"), api("GET", "/decisions?limit=5")])
+    .then(function (res) {
+      renderNodes(res[0]); renderVms(res[1]); renderDecisions(res[2]);
+      $("state").textContent = "connected, updated " + new Date().toLocaleTimeString();
+    }).catch(function (e) { $("state").textContent = "error: " + e.message; });
+}
+
+var term = null, fit = null, sock = null;
+
+function termSend(obj) {
+  if (sock && sock.readyState === 1) sock.send(JSON.stringify(obj));
+}
+
+function closeTerminal() {
+  if (sock) { try { sock.close(); } catch (e) {} sock = null; }
+}
+
+function openTerminal(vm) {
+  if (typeof Terminal === "undefined" || typeof FitAddon === "undefined") {
+    $("termBox").hidden = false;
+    $("termMsg").className = "msg err";
+    $("termMsg").textContent = "Terminal library did not load: check that dashboard/vendor/ exists next to index.html.";
+    return;
+  }
+  closeTerminal();
+  $("termTitle").textContent = "Terminal: " + vm.name + " (" + vm.ip_address + ")";
+  $("termMsg").className = "msg muted";
+  $("termBox").hidden = false;
+  if (!term) {
+    term = new Terminal({ cursorBlink: true, fontSize: 14 });
+    fit = new FitAddon.FitAddon();
+    term.loadAddon(fit);
+    term.open($("termScreen"));
+    term.onData(function (d) { termSend({ type: "input", data: d }); });
+    term.onResize(function (s) { termSend({ type: "resize", cols: s.cols, rows: s.rows }); });
+    window.addEventListener("resize", function () { fit.fit(); });
+  }
+  term.reset();
+  fit.fit();
+  var proto = location.protocol === "https:" ? "wss:" : "ws:";
+  var s = new WebSocket(proto + "//" + location.host + "/vms/" + vm.id + "/terminal");
+  sock = s;
+  s.binaryType = "arraybuffer";
+  s.onopen = function () {
+    s.send(JSON.stringify({ token: token, cols: term.cols, rows: term.rows }));
+    term.focus();
+  };
+  s.onmessage = function (e) { term.write(new Uint8Array(e.data)); };
+  s.onclose = function (e) {
+    term.writeln("\r\n[disconnected" + (e.reason ? ": " + e.reason : "") + "]");
+    if (sock === s) sock = null;
+  };
+  $("termBox").scrollIntoView({ behavior: "smooth" });
+}
+
+$("termClose").addEventListener("click", function () { closeTerminal(); $("termBox").hidden = true; });
+
+function connect() {
+  token = $("token").value.trim() || token;
+  if (!token) { $("state").textContent = "enter the API token"; return; }
+  try { sessionStorage.setItem("ps023token", token); } catch (e) {}
+  $("token").value = "";
+  if (timer) clearInterval(timer);
+  refresh(); timer = setInterval(refresh, 5000);
+}
+
+$("connect").addEventListener("click", connect);
+$("token").addEventListener("keydown", function (e) { if (e.key === "Enter") connect(); });
+$("create").addEventListener("submit", function (e) {
+  e.preventDefault();
+  var m = $("createMsg"); m.className = "msg muted"; m.textContent = "Creating (this boots a VM, up to about a minute) ...";
+  api("POST", "/vms", { name: $("name").value, vcpus: +$("vcpus").value,
+                        memory_mb: +$("mem").value, disk_gb: +$("disk").value })
+    .then(function (v) { m.textContent = "Created " + v.name + " on " + v.node_id + " (" + v.id + ")"; refresh(); })
+    .catch(function (err) { m.className = "msg err"; m.textContent = "Create failed: " + err.message; });
+});
+if (token) connect();
+</script>
+</body>
+</html>

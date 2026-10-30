@@ -1,0 +1,455 @@
+/* VM Controller — Iridescent Glass + Cinematic Blue Infrastructure Design System */
+@import "@xterm/xterm/css/xterm.css";
+
+:root {
+  /* Cinematic Blue & Iridescent Design Tokens */
+  --color-deep-navy: #101827;
+  --color-midnight-blue: #0A1428;
+  --color-elevated-blue-grey: #1A2942;
+  --color-soft-white: #F4F6FF;
+  --color-secondary-text: #A8B4CA;
+
+  /* Controller Palette */
+  --color-cobalt-blue: #3158C9;
+  --color-pearl-silver: #DCE6F2;
+  --color-electric-cyan: #00D9FF;
+  --color-periwinkle: #8FA8FF;
+
+  /* Worker Node A — Jade Glass */
+  --color-jade: #18C9A7;
+  --color-mint: #75F0D0;
+  --color-deep-teal: #126E70;
+
+  /* Worker Node B — Amethyst Glass */
+  --color-amethyst: #9366F1;
+  --color-lavender: #D1B8FF;
+  --color-deep-violet: #492B8D;
+
+  /* Virtual Machines — Frosted Pearl Glass */
+  --color-frosted-pearl: #F4F1FF;
+  --color-pale-blue: #B8D9FF;
+  --color-warm-highlight: #FFCA80;
+
+  /* Real Infrastructure Health Indicators */
+  --color-emerald-green: #168A62;
+  --color-vermilion: #E6533C;
+  --color-amber: #FFB800;
+
+  /* Theme mappings */
+  --bg-primary: #0A1428;        /* Midnight blue */
+  --bg-elevated: #101827;       /* Deep navy */
+  --bg-surface: #101827;        /* Deep navy */
+  --bg-card: #1A2942;           /* Elevated blue-grey */
+  --bg-sidebar: #0A1428;        /* Midnight blue sidebar */
+  --sidebar-text: #F4F6FF;
+  --sidebar-muted: #A8B4CA;
+  --sidebar-border: #1E2D4A;
+  --sidebar-active: rgba(0, 217, 255, 0.16);
+  --sidebar-hover: rgba(244, 246, 255, 0.06);
+
+  --text-primary: #F4F6FF;
+  --text-secondary: #C8D3E6;
+  --text-muted: #A8B4CA;
+
+  --border: #1E2D4A;
+  --border-subtle: #142036;
+  --border-glow: rgba(0, 217, 255, 0.38);
+
+  --primary: #00D9FF;           /* Electric Cyan */
+  --primary-deep: #3158C9;      /* Cobalt Blue */
+  --primary-hover: #38e1ff;
+  --primary-subtle: rgba(0, 217, 255, 0.15);
+
+  --accent-violet: #9366F1;     /* Amethyst */
+  --accent-jade: #18C9A7;       /* Jade */
+  --accent-periwinkle: #8FA8FF; /* Periwinkle */
+  --color-acid-lime: #168A62;   /* Emerald Green for healthy */
+  --color-signal-coral: #E6533C;/* Vermilion for critical */
+
+  --danger: #E6533C;            /* Vermilion */
+  --danger-hover: #f0644e;
+  --danger-subtle: rgba(230, 83, 60, 0.18);
+
+  --warning: #FFB800;
+  --warning-subtle: rgba(255, 184, 0, 0.16);
+
+  --font-heading: 'Space Grotesk', 'Manrope', system-ui, -apple-system, sans-serif;
+  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 18px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.7);
+  --shadow-modal: 0 24px 70px rgba(0, 0, 0, 0.85);
+  --shadow-cyan-glow: 0 0 25px rgba(0, 217, 255, 0.28);
+  --shadow-cobalt-glow: 0 0 30px rgba(49, 88, 201, 0.35);
+  --shadow-violet-glow: 0 0 25px rgba(147, 102, 241, 0.25);
+  --shadow-jade-glow: 0 0 25px rgba(24, 201, 167, 0.25);
+}
+
+.light {
+  --bg-primary: #F4F6FF;
+  --bg-elevated: #FFFFFF;
+  --bg-surface: #FFFFFF;
+  --bg-card: #EAF0FA;
+  --bg-sidebar: #0A1428;
+  --sidebar-text: #F4F6FF;
+  --sidebar-muted: #A8B4CA;
+  --sidebar-border: #1E2D4A;
+  --sidebar-active: rgba(0, 217, 255, 0.18);
+  --sidebar-hover: rgba(255, 255, 255, 0.08);
+
+  --text-primary: #0A1428;
+  --text-secondary: #3D4A63;
+  --text-muted: #64748B;
+
+  --border: #D1DBEB;
+  --border-subtle: #E2E8F4;
+
+  --primary: #009EC2;
+  --primary-deep: #3158C9;
+  --primary-hover: #0087A6;
+  --primary-subtle: rgba(0, 158, 194, 0.12);
+
+  --danger: #E6533C;
+  --danger-hover: #CC3F2B;
+  --danger-subtle: rgba(230, 83, 60, 0.12);
+
+  --warning: #D99800;
+  --warning-subtle: rgba(217, 152, 0, 0.14);
+
+  --shadow-sm: 0 1px 2px rgba(10, 20, 40, 0.06);
+  --shadow-md: 0 4px 12px rgba(10, 20, 40, 0.08);
+  --shadow-lg: 0 12px 28px rgba(10, 20, 40, 0.1);
+  --shadow-modal: 0 20px 48px rgba(10, 20, 40, 0.2);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+
+code, kbd, samp, pre {
+  font-family: var(--font-mono);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(168, 180, 202, 0.3);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 217, 255, 0.6);
+}
+
+/* Iridescent Glass & Atmosphere Panels */
+.glass-panel {
+  background: rgba(16, 24, 39, 0.76);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--border);
+}
+
+.glass-panel-glow {
+  background: rgba(16, 24, 39, 0.88);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  border: 1px solid var(--border-glow);
+  box-shadow: 0 0 35px rgba(0, 217, 255, 0.2);
+}
+
+.hero-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--primary);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hero-headline {
+  font-family: var(--font-heading);
+  font-size: clamp(36px, 5.5vw, 64px);
+  font-weight: 800;
+  line-height: 1.06;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+}
+
+/* Common UI Elements */
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid transparent;
+  outline: none;
+  transition: all 0.15s ease-in-out;
+}
+
+button:focus-visible {
+  box-shadow: 0 0 0 2px var(--primary);
+}
+
+input, select, textarea {
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 2px var(--primary-subtle);
+}
+
+/* Range input styling */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  background: var(--border);
+  border-radius: 999px;
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--primary);
+  border: 2px solid var(--bg-surface);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  transition: transform 0.1s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(5px);
+  }
+}
+
+.animate-bounce {
+  animation: bounce 2s infinite ease-in-out;
+}
+
+/* =========================================================================
+   VC System Layout & Typography Spacing
+   ========================================================================= */
+.vc-page-container {
+  padding: 32px 36px;
+  max-width: 1440px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .vc-page-container {
+    padding: 18px 16px;
+  }
+}
+
+.vc-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.vc-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.vc-stat-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.vc-stat-card:hover {
+  border-color: var(--border-glow);
+}
+
+.vc-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--bg-surface);
+  padding: 16px 20px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-sm);
+}
+
+.vc-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+}
+
+/* =========================================================================
+   VC Standard Table System (.vc-table)
+   ========================================================================= */
+.vc-table-container {
+  background-color: var(--bg-surface);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.vc-table-scroll {
+  overflow-x: auto;
+  width: 100%;
+}
+
+.vc-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.vc-table thead {
+  background-color: rgba(16, 24, 39, 0.45);
+  border-bottom: 1px solid var(--border);
+}
+
+.light .vc-table thead {
+  background-color: rgba(234, 240, 250, 0.6);
+}
+
+.vc-table th {
+  padding: 14px 20px;
+  font-family: var(--font-heading);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.vc-table th:first-child {
+  padding-left: 24px;
+}
+
+.vc-table th:last-child {
+  padding-right: 24px;
+}
+
+.vc-table td {
+  padding: 16px 20px;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+
+.vc-table td:first-child {
+  padding-left: 24px;
+}
+
+.vc-table td:last-child {
+  padding-right: 24px;
+}
+
+.vc-table tbody tr {
+  transition: background-color 0.12s ease;
+}
+
+.vc-table tbody tr:hover {
+  background-color: rgba(0, 217, 255, 0.035);
+}
+
+.vc-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Recharts Custom Tooltip Container */
+.recharts-custom-tooltip {
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  box-shadow: var(--shadow-lg);
+  font-size: 12px;
+  color: var(--text-primary);
+  pointer-events: none;
+}
+
