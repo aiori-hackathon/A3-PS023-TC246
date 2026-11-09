@@ -12,6 +12,7 @@ from pathlib import Path
 import psutil
 
 from cloud_hypervisor import CloudHypervisor
+from cgroup_manager import CgroupManager
 
 LAB = Path.home() / "ps023" / "lab"
 VM_ROOT = Path(os.environ.get("PS023_VM_ROOT", str(Path.home() / "ps023" / "vms")))
@@ -36,6 +37,7 @@ class VMManager:
         self._lock = threading.Lock()
         self._procs = {}  # vm_id -> Popen, so exited children get reaped
         self._unreaped = []  # exited VMMs we could not collect yet
+        self._cgroups = CgroupManager()
 
     # ---------- paths and metadata ----------
     def _dir(self, vm_id):
@@ -84,6 +86,7 @@ class VMManager:
                 "memory_mb": memory_mb, "disk_gb": disk_gb, "slot": slot,
                 "tap": tap, "mac": f"12:34:56:78:90:{slot:02x}",
                 "ip": f"{SUBNET}.{10 + slot}", "created_at": time.time(),
+                "cgroups": False, "cgroup_limits": None,
             }
             try:
                 subprocess.run(["cp", "--reflink=auto", str(BASE_IMAGE),
@@ -185,9 +188,12 @@ class VMManager:
                 proc.wait(timeout=5)  # collect the exit status: no zombie
             except subprocess.TimeoutExpired:
                 self._unreaped.append(proc)  # retried from _reap_pending()
+        self._cgroups.remove_vm_cgroup(vm_id)
+        self._cgroups.cleanup_empty_leftovers()
 
     def _reap_pending(self):
         self._unreaped = [p for p in self._unreaped if p.poll() is None]
+        self._cgroups.cleanup_empty_leftovers()
 
     # ---------- start ----------
     def _config(self, meta):
@@ -214,6 +220,10 @@ class VMManager:
                 return
             self._kill_hard(vm_id)  # idle or half-started VMM: begin clean
         self._clean_runtime(vm_id)
+
+        # Prepare cgroup with verified limits before launching process
+        cg_info = self._cgroups.create_vm_cgroup(vm_id, meta["vcpus"], meta["memory_mb"])
+
         log = open(d / "vmm.log", "ab")
         proc = subprocess.Popen(
             [CH_BIN, "--api-socket", f"path={self._sock(vm_id)}"],
@@ -223,6 +233,16 @@ class VMManager:
         log.close()
         self._procs[vm_id] = proc
         (d / "vmm.pid").write_text(str(proc.pid))
+
+        if cg_info["enabled"]:
+            attached = self._cgroups.attach_vmm(vm_id, proc.pid)
+            meta["cgroups"] = attached
+            meta["cgroup_limits"] = cg_info["limits"] if attached else None
+        else:
+            meta["cgroups"] = False
+            meta["cgroup_limits"] = None
+        (d / "meta.json").write_text(json.dumps(meta, indent=2))
+
         try:
             end = time.time() + 5
             while not self._sock(vm_id).exists():
@@ -239,22 +259,34 @@ class VMManager:
 
     # ---------- stop: graceful first, then escalate ----------
     def stop(self, vm_id, graceful_timeout=30):
-        self._meta(vm_id)
+        meta = self._meta(vm_id)
         if not self._alive(vm_id):
             self._clean_runtime(vm_id)
+            meta["cgroups"] = False
+            meta["cgroup_limits"] = None
+            (self._dir(vm_id) / "meta.json").write_text(json.dumps(meta, indent=2))
             return "already-stopped"
         ch = self._ch(vm_id)
         self._quiet(ch.power_button)
         if self._wait_exit(vm_id, graceful_timeout):
             self._clean_runtime(vm_id)
+            meta["cgroups"] = False
+            meta["cgroup_limits"] = None
+            (self._dir(vm_id) / "meta.json").write_text(json.dumps(meta, indent=2))
             return "graceful"
         self._quiet(ch.shutdown)
         self._quiet(ch.vmm_shutdown)
         if self._wait_exit(vm_id, 5):
             self._clean_runtime(vm_id)
+            meta["cgroups"] = False
+            meta["cgroup_limits"] = None
+            (self._dir(vm_id) / "meta.json").write_text(json.dumps(meta, indent=2))
             return "forced-api"
         method = self._kill_hard(vm_id)
         self._clean_runtime(vm_id)
+        meta["cgroups"] = False
+        meta["cgroup_limits"] = None
+        (self._dir(vm_id) / "meta.json").write_text(json.dumps(meta, indent=2))
         return method
 
     def _kill_hard(self, vm_id):
@@ -288,6 +320,8 @@ class VMManager:
     def get(self, vm_id):
         meta = self._meta(vm_id)
         meta["status"] = self.status(vm_id)
+        meta.setdefault("cgroups", False)
+        meta.setdefault("cgroup_limits", None)
         return meta
 
     def list(self):

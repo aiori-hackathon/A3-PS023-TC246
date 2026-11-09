@@ -5,7 +5,7 @@ import psutil
 HOST_RESERVE_MB = 1024
 
 
-def get_resources(node_id, vms):
+def get_resources(node_id, vms, cgroups_enabled=False):
     """vms: list of VM dicts from VMManager.list()."""
     mem = psutil.virtual_memory()
     total_mb = mem.total // (1024 * 1024)
@@ -26,4 +26,5 @@ def get_resources(node_id, vms):
         "memory_schedulable_mb": max(0, available_mb - HOST_RESERVE_MB),
         "vms_total": len(vms),
         "vms_running": len(running),
+        "cgroups_enabled": cgroups_enabled,
     }

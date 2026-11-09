@@ -63,8 +63,9 @@ Cloud Hypervisor API.
 * Each VM has its own folder: a disk reflinked from the base image, a
   cloud-init seed with a unique instance id, and a unix socket for the
   Cloud Hypervisor API.
-* The VMM is started with `start_new_session=True`, so running VMs survive a
-  worker restart.
+* The VMM is started with `start_new_session=True`. Running VMs survive a
+  worker restart on node A, and on node B only when the systemd unit specifies
+  `KillMode=process` (pending live verification on the cloud instance).
 * **Stop escalation**: power button (up to 30 s) -> `vm.shutdown` +
   `vmm.shutdown` (5 s) -> `SIGTERM` (5 s) -> `SIGKILL` (5 s). The child
   process is then reaped, so no zombie remains.
@@ -73,11 +74,33 @@ Cloud Hypervisor API.
 * Requests are validated: VM names, ids and sizes (1-8 vCPUs, 128-8192 MB
   memory, 1-50 GB disk).
 
-## Resource limits
+## Resource limits and cgroups v2
 
-Requested vCPUs, memory and disk are validated by the controller and passed to
-Cloud Hypervisor. cgroup limits are **not** implemented.
+Requested vCPUs, memory, and disk are validated by the controller and passed to
+Cloud Hypervisor. Resource limits are strictly enforced on each worker using
+cgroups v2:
+* **Delegated Subtree**: The worker runs unprivileged under systemd / cgroups v2.
+  To satisfy the cgroup v2 "no internal processes" rule, the worker moves itself
+  into a child cgroup (`worker/`), enables `cpu`, `memory`, and `pids` controllers
+  in `cgroup.subtree_control`, and creates each VM in a sibling cgroup (`ps023-vmm-<vm_id>`).
+* **Fallback Strategy**: If the worker is launched interactively in a shared terminal
+  scope (e.g., `kitty-*.scope`), enabling controllers on the scope fails due to sibling
+  processes; the manager automatically falls back to delegating from the parent
+  `app.slice` which has controllers enabled. If delegation cannot be verified by
+  reading back `cgroup.subtree_control`, enforcement gracefully falls back to disabled
+  with a warning, never blocking VM launch.
+* **Limit Calculations**:
+  * `memory.max`: guest RAM (`memory_mb`) + fixed overhead (default 128 MB, configurable via `PS023_CGROUP_MEMORY_OVERHEAD_MB`).
+  * `cpu.max`: quota = `vcpus * 100000 * headroom` with period 100000 (default headroom 1.25, configurable via `PS023_CGROUP_CPU_HEADROOM`).
+  * `pids.max`: minimum 256 or `vcpus * 16` (default 256, configurable via `PS023_CGROUP_PIDS_MIN`).
+  * All defaults are unmeasured engineering estimates until profiled under production workloads.
+* **Read-Back Verification**: Limit values are confirmed by reading back from the kernel
+  cgroup files (`memory.max`, `cpu.max`, `pids.max`) before reporting enforcement.
+* **Process Lifecycle & Cleanup**: On VM stop, cgroups are reset to unenforced.
+  Cgroups are removed via `rmdir` only after the VMM process has been fully reaped,
+  retrying on `EBUSY` and tolerating `ENOENT`. Empty leftover cgroups are periodically
+  pruned with a 10 s age threshold to avoid racing with concurrent VM creation.
 
 ## Not implemented
 
-Dashboard, TLS/mTLS, cgroup limits, live migration, distributed storage.
+TLS/mTLS, live migration, distributed storage.

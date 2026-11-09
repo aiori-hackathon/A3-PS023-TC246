@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS nodes (
     memory_schedulable_mb INTEGER,
     cpu_total INTEGER,
     vms_running INTEGER,
-    last_heartbeat REAL
+    last_heartbeat REAL,
+    cgroups_enabled INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS vms (
     id TEXT PRIMARY KEY,
@@ -38,7 +39,9 @@ CREATE TABLE IF NOT EXISTS vms (
     evacuation_started_at REAL,
     evacuation_retries INTEGER DEFAULT 0,
     evacuation_error TEXT,
-    recovery_time_s REAL
+    recovery_time_s REAL,
+    cgroups INTEGER NOT NULL DEFAULT 0,
+    cgroup_limits TEXT
 );
 CREATE TABLE IF NOT EXISTS decisions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,10 +66,11 @@ VM_FIELDS = {
     "name", "node_id", "worker_vm_id", "status", "vcpus",
     "memory_mb", "disk_gb", "ip_address", "ha", "image",
     "user_data", "tags", "evacuation_started_at",
-    "evacuation_retries", "evacuation_error", "recovery_time_s"
+    "evacuation_retries", "evacuation_error", "recovery_time_s",
+    "cgroups", "cgroup_limits"
 }
 NODE_FIELDS = {"url", "status", "memory_total_mb", "memory_schedulable_mb",
-               "cpu_total", "vms_running", "last_heartbeat"}
+               "cpu_total", "vms_running", "last_heartbeat", "cgroups_enabled"}
 
 
 @contextmanager
@@ -89,6 +93,10 @@ def init_db(path=None):
         c.executescript(SCHEMA)
         # Safe, idempotent migration for existing databases
         cursor = c.cursor()
+        node_cols = {col[1] for col in cursor.execute("PRAGMA table_info(nodes)").fetchall()}
+        if "cgroups_enabled" not in node_cols:
+            cursor.execute("ALTER TABLE nodes ADD COLUMN cgroups_enabled INTEGER NOT NULL DEFAULT 0")
+
         vm_cols = {col[1] for col in cursor.execute("PRAGMA table_info(vms)").fetchall()}
         new_cols = [
             ("ha", "INTEGER NOT NULL DEFAULT 0"),
@@ -99,6 +107,8 @@ def init_db(path=None):
             ("evacuation_retries", "INTEGER DEFAULT 0"),
             ("evacuation_error", "TEXT"),
             ("recovery_time_s", "REAL"),
+            ("cgroups", "INTEGER NOT NULL DEFAULT 0"),
+            ("cgroup_limits", "TEXT"),
         ]
         for col_name, col_def in new_cols:
             if col_name not in vm_cols:
@@ -109,12 +119,28 @@ def _rows(cur):
     return [dict(r) for r in cur.fetchall()]
 
 
+def _format_node(node):
+    if node is None:
+        return None
+    d = dict(node)
+    if "cgroups_enabled" in d:
+        d["cgroups_enabled"] = bool(d["cgroups_enabled"])
+    return d
+
+
 def _format_vm(vm):
     if vm is None:
         return None
     d = dict(vm)
     if "ha" in d:
         d["ha"] = bool(d["ha"])
+    if "cgroups" in d:
+        d["cgroups"] = bool(d["cgroups"])
+    if "cgroup_limits" in d and isinstance(d["cgroup_limits"], str):
+        try:
+            d["cgroup_limits"] = json.loads(d["cgroup_limits"])
+        except Exception:
+            pass
     if "tags" in d and isinstance(d["tags"], str):
         try:
             d["tags"] = json.loads(d["tags"])
@@ -148,12 +174,12 @@ def update_node(node_id, path=None, **fields):
 def get_node(node_id, path=None):
     with connect(path) as c:
         r = c.execute("SELECT * FROM nodes WHERE id = ?", (node_id,)).fetchone()
-    return dict(r) if r else None
+    return _format_node(r)
 
 
 def list_nodes(path=None):
     with connect(path) as c:
-        return _rows(c.execute("SELECT * FROM nodes ORDER BY id"))
+        return [_format_node(r) for r in c.execute("SELECT * FROM nodes ORDER BY id").fetchall()]
 
 
 # ---------- vms ----------

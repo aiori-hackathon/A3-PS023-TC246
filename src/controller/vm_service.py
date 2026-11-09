@@ -1,4 +1,5 @@
 """VM operations: placement, worker calls, and bookkeeping."""
+import json
 import threading
 
 import database as db
@@ -90,8 +91,15 @@ def create_vm(name, vcpus, memory_mb, disk_gb=4, path=None,
         finally:
             client.close()
 
-        db.update_vm(vm_id, path, worker_vm_id=wvm["id"],
-                     status=wvm["status"].upper(), ip_address=wvm.get("ip"))
+        fields = {
+            "worker_vm_id": wvm["id"],
+            "status": wvm["status"].upper(),
+            "ip_address": wvm.get("ip"),
+        }
+        if "cgroups" in wvm:
+            fields["cgroups"] = 1 if wvm["cgroups"] else 0
+            fields["cgroup_limits"] = json.dumps(wvm["cgroup_limits"]) if wvm.get("cgroup_limits") else None
+        db.update_vm(vm_id, path, **fields)
         return db.get_vm(vm_id, path)
 
 
@@ -116,8 +124,14 @@ def _call(vm, action, path):
 
 
 def _sync(vm_id, wvm, path):
-    db.update_vm(vm_id, path, status=wvm["status"].upper(),
-                 ip_address=wvm.get("ip"))
+    fields = {
+        "status": wvm["status"].upper(),
+        "ip_address": wvm.get("ip"),
+    }
+    if "cgroups" in wvm:
+        fields["cgroups"] = 1 if wvm["cgroups"] else 0
+        fields["cgroup_limits"] = json.dumps(wvm["cgroup_limits"]) if wvm.get("cgroup_limits") else None
+    db.update_vm(vm_id, path, **fields)
     return db.get_vm(vm_id, path)
 
 
