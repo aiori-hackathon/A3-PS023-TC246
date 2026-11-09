@@ -75,6 +75,10 @@ class CreateVM(BaseModel):
     vcpus: int = Field(ge=1, le=8)
     memory_mb: int = Field(ge=128, le=8192)
     disk_gb: int = Field(default=4, ge=1, le=50)
+    ha: bool = False
+    image: str = "ubuntu-24-04"
+    user_data: str | None = None
+    tags: list[str] = Field(default_factory=list)
 
 
 @app.exception_handler(svc.NotFound)
@@ -136,7 +140,10 @@ def node_resources(node_id: NodeId):
 
 @app.post("/vms", status_code=201, dependencies=auth)
 def create_vm(req: CreateVM):
-    return svc.create_vm(req.name, req.vcpus, req.memory_mb, req.disk_gb)
+    return svc.create_vm(
+        req.name, req.vcpus, req.memory_mb, req.disk_gb,
+        None, req.ha, req.image, req.user_data, req.tags,
+    )
 
 
 @app.get("/vms", dependencies=auth)

@@ -1,14 +1,27 @@
 """Node health: poll each worker and record the result."""
+import os
 import time
 
 import database as db
 from worker_client import WorkerClient, WorkerError, WorkerUnreachable
 
-UNHEALTHY_AFTER_S = 15.0
+DEFAULT_UNHEALTHY_AFTER_S = 15.0
 
 
-def health_status(last_heartbeat, now, threshold=UNHEALTHY_AFTER_S):
+def unhealthy_threshold():
+    try:
+        return float(os.environ.get("PS023_UNHEALTHY_THRESHOLD_S", DEFAULT_UNHEALTHY_AFTER_S))
+    except (ValueError, TypeError):
+        return DEFAULT_UNHEALTHY_AFTER_S
+
+
+UNHEALTHY_AFTER_S = unhealthy_threshold()
+
+
+def health_status(last_heartbeat, now, threshold=None):
     """Pure rule, easy to test: no heartbeat, or too old, means UNHEALTHY."""
+    if threshold is None:
+        threshold = unhealthy_threshold()
     if last_heartbeat is None:
         return "UNHEALTHY"
     return "HEALTHY" if now - last_heartbeat <= threshold else "UNHEALTHY"

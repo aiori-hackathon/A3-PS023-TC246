@@ -33,7 +33,7 @@ class WorkerRejected(Exception):
 def node_views(path=None, down=()):
     reserved = {}
     for vm in db.list_vms(path):
-        if vm["status"] in ("PENDING", "RUNNING", "UNKNOWN"):
+        if vm["status"] in ("PENDING", "RUNNING", "UNKNOWN", "EVACUATING"):
             reserved[vm["node_id"]] = reserved.get(vm["node_id"], 0) + vm["memory_mb"]
     views = []
     for n in db.list_nodes(path):
@@ -44,7 +44,8 @@ def node_views(path=None, down=()):
     return views
 
 
-def create_vm(name, vcpus, memory_mb, disk_gb=4, path=None):
+def create_vm(name, vcpus, memory_mb, disk_gb=4, path=None,
+              ha=False, image="ubuntu-24-04", user_data=None, tags=None):
     ns.poll_all(path)
     down = set()  # nodes that failed during this request
     refused = {}  # node id -> why it failed, so the final error can say so
@@ -64,7 +65,8 @@ def create_vm(name, vcpus, memory_mb, disk_gb=4, path=None):
                 raise NoCapacity(decision)
             node = db.get_node(decision.selected, path)
             vm_id = db.add_vm(name, node["id"], vcpus, memory_mb, disk_gb,
-                              "PENDING", path)
+                              "PENDING", path, ha=ha, image=image,
+                              user_data=user_data, tags=tags)
             db.record_decision(decision, vm_id, path)
 
         client = WorkerClient(node["id"], node["url"])

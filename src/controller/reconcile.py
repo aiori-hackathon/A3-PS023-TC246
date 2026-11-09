@@ -2,6 +2,7 @@
 import time
 
 import database as db
+import evacuation as evac
 from worker_client import WorkerClient, WorkerError, WorkerUnreachable
 
 PENDING_TIMEOUT_S = 120  # a PENDING row older than this was abandoned
@@ -54,6 +55,44 @@ def _sync_node(node, remote, client, path, now):
                 _log(f"could not remove orphan {wid}: {e}")
 
 
+def _fence_stale_copies(node, remote, client, path):
+    # 1. Check pending tombstones for this node
+    tombstones = db.get_pending_tombstones(node["id"], path)
+    for t in tombstones:
+        wid_to_delete = None
+        if t["worker_vm_id"] in remote:
+            wid_to_delete = t["worker_vm_id"]
+        else:
+            for wid, w in list(remote.items()):
+                if w.get("name") == t["vm_name"]:
+                    wid_to_delete = wid
+                    break
+        if wid_to_delete:
+            try:
+                client.delete_vm(wid_to_delete)
+                remote.pop(wid_to_delete, None)
+                _log(f"fenced stale copy {wid_to_delete} ({t['vm_name']}) on recovered {node['id']}")
+            except (WorkerUnreachable, WorkerError) as e:
+                _log(f"could not fence stale copy {wid_to_delete}: {e}")
+        db.mark_tombstone_fenced(t["id"], path)
+
+    # 2. Check if any remote VM has the same name as an active HA VM on another node
+    all_vms = db.list_vms(path)
+    other_ha_vms = {
+        v["name"]: v for v in all_vms
+        if v.get("ha") and v["node_id"] != node["id"] and v["status"] in ("RUNNING", "EVACUATING")
+    }
+    for wid, w in list(remote.items()):
+        name = w.get("name") or (wid[2:] if wid.startswith("w-") else wid)
+        if name in other_ha_vms:
+            try:
+                client.delete_vm(wid)
+                remote.pop(wid, None)
+                _log(f"fenced duplicate stale VM {wid} ({name}) on {node['id']}")
+            except (WorkerUnreachable, WorkerError) as e:
+                _log(f"could not fence duplicate stale VM {wid}: {e}")
+
+
 def reconcile(path=None, now=None):
     now = time.time() if now is None else now
     for node in db.list_nodes(path):
@@ -66,6 +105,9 @@ def reconcile(path=None, now=None):
                 remote = {w["id"]: w for w in client.list_vms()}
             except (WorkerUnreachable, WorkerError):
                 continue
+            _fence_stale_copies(node, remote, client, path)
             _sync_node(node, remote, client, path, now)
         finally:
             client.close()
+
+    evac.evacuate_unhealthy_vms(path=path, now=now)

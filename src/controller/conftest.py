@@ -3,6 +3,7 @@ import time
 import pytest
 
 import database as db
+import evacuation as evac
 import reconcile as rc
 import vm_service as vs
 from worker_client import WorkerError, WorkerUnreachable
@@ -31,7 +32,7 @@ class Fake:
     def create_vm(self, name, vcpus, memory_mb, disk_gb, start=True):
         self._up()
         wid = "w-" + name
-        REMOTE[self.n][wid] = {"id": wid, "status": "running",
+        REMOTE[self.n][wid] = {"id": wid, "name": name, "status": "running",
                                "ip": "10.0.0.9", "created_at": time.time()}
         return REMOTE[self.n][wid]
 
@@ -62,7 +63,7 @@ def env(tmp_path, monkeypatch):
     REMOTE.clear()
     DOWN.clear()
     REMOTE.update({"node-a": {}, "node-b": {}})
-    for mod in (vs, rc):
+    for mod in (vs, rc, evac):
         monkeypatch.setattr(mod, "WorkerClient", Fake)
     monkeypatch.setattr(vs.ns, "poll_all", lambda path=None: None)
     p = str(tmp_path / "t.db")

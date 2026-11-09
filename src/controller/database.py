@@ -30,7 +30,15 @@ CREATE TABLE IF NOT EXISTS vms (
     memory_mb INTEGER NOT NULL,
     disk_gb INTEGER NOT NULL,
     ip_address TEXT,
-    created_at REAL NOT NULL
+    created_at REAL NOT NULL,
+    ha INTEGER NOT NULL DEFAULT 0,
+    image TEXT DEFAULT 'ubuntu-24-04',
+    user_data TEXT,
+    tags TEXT DEFAULT '[]',
+    evacuation_started_at REAL,
+    evacuation_retries INTEGER DEFAULT 0,
+    evacuation_error TEXT,
+    recovery_time_s REAL
 );
 CREATE TABLE IF NOT EXISTS decisions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -41,10 +49,22 @@ CREATE TABLE IF NOT EXISTS decisions (
     reason TEXT NOT NULL,
     candidates TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS stale_vm_tombstones (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    node_id TEXT NOT NULL,
+    worker_vm_id TEXT NOT NULL,
+    vm_name TEXT NOT NULL,
+    evacuated_at REAL NOT NULL,
+    fenced_at REAL
+);
 """
 
-VM_FIELDS = {"name", "node_id", "worker_vm_id", "status", "vcpus",
-             "memory_mb", "disk_gb", "ip_address"}
+VM_FIELDS = {
+    "name", "node_id", "worker_vm_id", "status", "vcpus",
+    "memory_mb", "disk_gb", "ip_address", "ha", "image",
+    "user_data", "tags", "evacuation_started_at",
+    "evacuation_retries", "evacuation_error", "recovery_time_s"
+}
 NODE_FIELDS = {"url", "status", "memory_total_mb", "memory_schedulable_mb",
                "cpu_total", "vms_running", "last_heartbeat"}
 
@@ -67,10 +87,40 @@ def connect(path=None):
 def init_db(path=None):
     with connect(path) as c:
         c.executescript(SCHEMA)
+        # Safe, idempotent migration for existing databases
+        cursor = c.cursor()
+        vm_cols = {col[1] for col in cursor.execute("PRAGMA table_info(vms)").fetchall()}
+        new_cols = [
+            ("ha", "INTEGER NOT NULL DEFAULT 0"),
+            ("image", "TEXT DEFAULT 'ubuntu-24-04'"),
+            ("user_data", "TEXT"),
+            ("tags", "TEXT DEFAULT '[]'"),
+            ("evacuation_started_at", "REAL"),
+            ("evacuation_retries", "INTEGER DEFAULT 0"),
+            ("evacuation_error", "TEXT"),
+            ("recovery_time_s", "REAL"),
+        ]
+        for col_name, col_def in new_cols:
+            if col_name not in vm_cols:
+                cursor.execute(f"ALTER TABLE vms ADD COLUMN {col_name} {col_def}")
 
 
 def _rows(cur):
     return [dict(r) for r in cur.fetchall()]
+
+
+def _format_vm(vm):
+    if vm is None:
+        return None
+    d = dict(vm)
+    if "ha" in d:
+        d["ha"] = bool(d["ha"])
+    if "tags" in d and isinstance(d["tags"], str):
+        try:
+            d["tags"] = json.loads(d["tags"])
+        except Exception:
+            pass
+    return d
 
 
 # ---------- nodes ----------
@@ -107,13 +157,17 @@ def list_nodes(path=None):
 
 
 # ---------- vms ----------
-def add_vm(name, node_id, vcpus, memory_mb, disk_gb, status="PENDING", path=None):
+def add_vm(name, node_id, vcpus, memory_mb, disk_gb, status="PENDING", path=None,
+           ha=False, image="ubuntu-24-04", user_data=None, tags=None):
     vm_id = "vm-" + uuid.uuid4().hex[:8]
+    tags_json = json.dumps(tags or [])
     with connect(path) as c:
         c.execute(
             "INSERT INTO vms (id, name, node_id, status, vcpus, memory_mb, "
-            "disk_gb, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (vm_id, name, node_id, status, vcpus, memory_mb, disk_gb, time.time()),
+            "disk_gb, created_at, ha, image, user_data, tags) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (vm_id, name, node_id, status, vcpus, memory_mb, disk_gb,
+             time.time(), 1 if ha else 0, image, user_data, tags_json),
         )
     return vm_id
 
@@ -124,6 +178,10 @@ def update_vm(vm_id, path=None, **fields):
         raise ValueError(f"unknown vm fields: {bad}")
     if not fields:
         return
+    if "ha" in fields:
+        fields["ha"] = 1 if fields["ha"] else 0
+    if "tags" in fields and isinstance(fields["tags"], (list, dict)):
+        fields["tags"] = json.dumps(fields["tags"])
     sets = ", ".join(f"{k} = ?" for k in fields)
     with connect(path) as c:
         c.execute(f"UPDATE vms SET {sets} WHERE id = ?",
@@ -133,17 +191,44 @@ def update_vm(vm_id, path=None, **fields):
 def get_vm(vm_id, path=None):
     with connect(path) as c:
         r = c.execute("SELECT * FROM vms WHERE id = ?", (vm_id,)).fetchone()
-    return dict(r) if r else None
+    return _format_vm(r)
 
 
 def list_vms(path=None):
     with connect(path) as c:
-        return _rows(c.execute("SELECT * FROM vms ORDER BY created_at"))
+        rows = _rows(c.execute("SELECT * FROM vms ORDER BY created_at"))
+    return [_format_vm(r) for r in rows]
 
 
 def delete_vm(vm_id, path=None):
     with connect(path) as c:
         c.execute("DELETE FROM vms WHERE id = ?", (vm_id,))
+
+
+# ---------- tombstones & fencing ----------
+def add_tombstone(node_id, worker_vm_id, vm_name, path=None):
+    with connect(path) as c:
+        c.execute(
+            "INSERT INTO stale_vm_tombstones (node_id, worker_vm_id, vm_name, evacuated_at) "
+            "VALUES (?, ?, ?, ?)",
+            (node_id, worker_vm_id, vm_name, time.time()),
+        )
+
+
+def get_pending_tombstones(node_id, path=None):
+    with connect(path) as c:
+        return _rows(c.execute(
+            "SELECT * FROM stale_vm_tombstones WHERE node_id = ? AND fenced_at IS NULL",
+            (node_id,)
+        ))
+
+
+def mark_tombstone_fenced(tombstone_id, path=None):
+    with connect(path) as c:
+        c.execute(
+            "UPDATE stale_vm_tombstones SET fenced_at = ? WHERE id = ?",
+            (time.time(), tombstone_id),
+        )
 
 
 # ---------- scheduler decisions ----------

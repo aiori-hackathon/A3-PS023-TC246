@@ -3,12 +3,18 @@ __pycache__/
 *.db
 *.bak*
 .venv/
+.venv-clean
+.venv-clean/
 *.raw
 *.img
 *.log
 *.sock*
 .env
 secrets.env
+*.pem
+*.key
+*.priv
+*private*key*
 
 # Frontend
 node_modules/
