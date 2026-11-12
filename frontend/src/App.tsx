@@ -14,7 +14,7 @@ import { DecisionsView } from "./views/DecisionsView";
 import { EventsView } from "./views/EventsView";
 import { SettingsView } from "./views/SettingsView";
 
-import { Node, VM, OSImage, Decision, EventItem, getToken, api } from "./api";
+import { Node, VM, OSImage, Decision, EventItem, getToken, initAuth, api } from "./api";
 
 export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<NavTab>(() => {
@@ -102,9 +102,23 @@ export const App: React.FC = () => {
     }
   };
 
+  // Listen for unauthorized 401 events to prompt token re-entry
+  useEffect(() => {
+    const handleAuthError = () => {
+      setIsConnected(false);
+      setConnectModalOpen(true);
+    };
+    window.addEventListener("vmc:auth-unauthorized", handleAuthError);
+    return () => window.removeEventListener("vmc:auth-unauthorized", handleAuthError);
+  }, []);
+
   // Main Fetch State
   const fetchData = useCallback(async () => {
-    if (!getToken()) {
+    let token = getToken();
+    if (!token) {
+      token = await initAuth();
+    }
+    if (!token) {
       setIsConnected(false);
       return;
     }

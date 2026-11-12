@@ -24,6 +24,16 @@ class CloudHypervisor:
             timeout=timeout,
         )
 
+    def close(self):
+        """Close the underlying HTTP client and release connection resources."""
+        self._client.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
     def _call(self, method, path, json=None):
         try:
             r = self._client.request(method, path, json=json)

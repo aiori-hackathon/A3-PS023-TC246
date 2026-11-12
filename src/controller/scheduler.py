@@ -18,13 +18,17 @@ class Decision:
     candidates: list = field(default_factory=list)  # one dict per node
 
 
-def place(nodes, requested_mb):
+def place(nodes, requested_mb, target_node=None):
     candidates = []
+    target = None if (not target_node or target_node == "auto") else target_node
+
     for n in nodes:
         if not n.healthy:
             verdict = "skipped: unhealthy"
         elif n.memory_schedulable_mb < requested_mb:
             verdict = "skipped: not enough memory"
+        elif target and n.node_id != target:
+            verdict = "skipped: not target node"
         else:
             verdict = "eligible"
         candidates.append({
@@ -33,6 +37,21 @@ def place(nodes, requested_mb):
             "available_mb": n.memory_schedulable_mb,
             "verdict": verdict,
         })
+
+    if target:
+        matched = [n for n in nodes if n.node_id == target]
+        if not matched:
+            return Decision(None, f"target node {target} not found",
+                            requested_mb, candidates)
+        tn = matched[0]
+        if not tn.healthy:
+            return Decision(None, f"target node {target} is unhealthy",
+                            requested_mb, candidates)
+        if tn.memory_schedulable_mb < requested_mb:
+            return Decision(None, f"target node {target} lacks memory",
+                            requested_mb, candidates)
+        return Decision(tn.node_id, f"pinned to target node {target}",
+                        requested_mb, candidates)
 
     eligible = [n for n in nodes
                 if n.healthy and n.memory_schedulable_mb >= requested_mb]

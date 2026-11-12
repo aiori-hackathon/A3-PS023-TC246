@@ -123,6 +123,95 @@ def test_status_stopped_without_vmm(mgr):
     assert mgr.status(VM) == "stopped"
 
 
+def test_frozen_vmm_lock_does_not_block_status(mgr, monkeypatch):
+    proc = spawn(mgr, VM)
+    fake = FakeCH(proc, obeys=True)
+    monkeypatch.setattr(mgr, "_ch", lambda vm_id: fake)
+
+    # Calling status records last known state
+    assert mgr.status(VM) == "running"
+    assert mgr._last_state.get(VM) == "running"
+
+    # Simulate a frozen operation holding the per-VM lock
+    lock = mgr._vm_lock(VM)
+    lock.acquire()
+    try:
+        t0 = time.time()
+        # Must not block indefinitely; returns last known state within timeout
+        st = mgr.status(VM, timeout=0.1)
+        t1 = time.time()
+        assert st == "running"
+        assert t1 - t0 < 0.5
+    finally:
+        lock.release()
+
+
+def test_status_25_sequential_calls_never_exceeds_10_conns(mgr, monkeypatch):
+    import socket
+    import threading
+
+    vm_id = "vm-conntest"
+    d = write_meta(vm_id)
+    sock_path = str(d / "vm.sock")
+
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    server.bind(sock_path)
+    server.listen(32)
+    server.settimeout(2.0)
+
+    stop_server = threading.Event()
+    active_conns = 0
+    max_concurrent = 0
+    conn_lock = threading.Lock()
+
+    def server_loop():
+        nonlocal active_conns, max_concurrent
+        while not stop_server.is_set():
+            try:
+                conn, _ = server.accept()
+                with conn_lock:
+                    active_conns += 1
+                    if active_conns > max_concurrent:
+                        max_concurrent = active_conns
+                req = conn.recv(1024)
+                if req:
+                    body = b'{"state":"Running"}'
+                    resp = (
+                        b"HTTP/1.1 200 OK\r\n"
+                        b"Content-Type: application/json\r\n"
+                        b"Content-Length: " + str(len(body)).encode() + b"\r\n"
+                        b"Connection: close\r\n\r\n" + body
+                    )
+                    conn.sendall(resp)
+                conn.close()
+                with conn_lock:
+                    active_conns -= 1
+            except socket.timeout:
+                continue
+            except Exception:
+                break
+
+    t = threading.Thread(target=server_loop, daemon=True)
+    t.start()
+
+    # Mock _alive to True so mgr.status calls through CloudHypervisor
+    monkeypatch.setattr(mgr, "_alive", lambda v: True)
+
+    try:
+        results = []
+        for _ in range(25):
+            st = mgr.status(vm_id)
+            results.append(st)
+
+        assert len(results) == 25
+        assert all(st == "running" for st in results)
+        assert max_concurrent <= 10
+    finally:
+        stop_server.set()
+        server.close()
+        t.join(timeout=1.0)
+
+
 def test_delete_stops_vmm_and_removes_files(mgr, monkeypatch):
     proc = spawn(mgr, VM)
     fake = FakeCH(proc, obeys=True)

@@ -1,25 +1,50 @@
-__pycache__/
-*.pyc
-*.db
-*.bak*
+# environment
 .venv/
 .venv-clean
 .venv-clean/
-*.raw
-*.img
-*.log
-*.sock*
+node_modules/
+frontend/node_modules/
+__pycache__/
+*.pyc
 .env
+
+# Credentials and keys
 secrets.env
+node_b.env
+*.env
 *.pem
 *.key
 *.priv
 *private*key*
+*.pub
+!images/logos/*.svg
+!images/logos/*.png
 
-# Frontend
-node_modules/
-frontend/node_modules/
-dist/
-frontend/dist/
-.vite/
-frontend/.vite/
+# VM runtime data and big binaries
+vms/
+vms-b/
+lab/
+images/
+kernel/
+*.raw
+*.img
+*.ext4
+*.qcow2
+vmlinux*
+
+# editor and scratch
+.agents/
+.obsidian/
+graphify-out/
+*.bak
+*.bak2
+*.tmp
+vm_part2.txt
+
+# hackathon reference documents (add back deliberately if allowed)
+*.pdf
+*.db
+outer/seed/
+outer/*.log
+outer/*.sock*
+secrets.env

@@ -60,7 +60,164 @@ CREATE TABLE IF NOT EXISTS stale_vm_tombstones (
     evacuated_at REAL NOT NULL,
     fenced_at REAL
 );
+CREATE TABLE IF NOT EXISTS events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at REAL NOT NULL,
+    event_type TEXT NOT NULL,
+    level TEXT NOT NULL DEFAULT 'INFO',
+    message TEXT NOT NULL,
+    details TEXT,
+    source TEXT DEFAULT 'controller'
+);
+CREATE TABLE IF NOT EXISTS images (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    distro TEXT NOT NULL,
+    version TEXT NOT NULL,
+    arch TEXT NOT NULL DEFAULT 'x86_64',
+    format TEXT NOT NULL DEFAULT 'raw',
+    path TEXT,
+    disk_size_bytes INTEGER,
+    status TEXT NOT NULL DEFAULT 'AVAILABLE',
+    verification_status TEXT DEFAULT 'VERIFIED',
+    checksum TEXT,
+    download_url TEXT,
+    created_at REAL NOT NULL,
+    kernel_compat TEXT DEFAULT 'COMPATIBLE',
+    notes TEXT
+);
+CREATE TABLE IF NOT EXISTS node_metrics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    node_id TEXT NOT NULL REFERENCES nodes(id),
+    timestamp REAL NOT NULL,
+    cpu_percent REAL NOT NULL,
+    memory_used_mb INTEGER NOT NULL,
+    memory_total_mb INTEGER NOT NULL,
+    memory_available_mb INTEGER NOT NULL,
+    memory_percent REAL NOT NULL,
+    disk_used_mb INTEGER,
+    disk_total_mb INTEGER,
+    disk_percent REAL,
+    network_rx_kbps REAL,
+    network_tx_kbps REAL,
+    vms_running INTEGER NOT NULL
+);
 """
+
+DEFAULT_IMAGES = [
+    {
+        "id": "ubuntu-24-04",
+        "name": "Ubuntu Server 24.04 LTS",
+        "distro": "Ubuntu",
+        "version": "24.04 LTS (Noble Numbat)",
+        "arch": "x86_64",
+        "format": "raw",
+        "path": str(Path.home() / "ps023" / "lab" / "images" / "ubuntu-noble.raw"),
+        "disk_size_bytes": 3758096384,
+        "status": "AVAILABLE",
+        "verification_status": "VERIFIED",
+        "checksum": "sha256:verified-local",
+        "download_url": "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img",
+        "kernel_compat": "COMPATIBLE",
+        "notes": "Verified official Ubuntu noble raw disk image. Bootable out of the box via direct kernel boot.",
+    },
+    {
+        "id": "debian-12",
+        "name": "Debian 12 Bookworm",
+        "distro": "Debian",
+        "version": "12 (Bookworm)",
+        "arch": "x86_64",
+        "format": "raw",
+        "path": str(Path.home() / "ps023" / "images" / "debian-12.raw"),
+        "disk_size_bytes": 3221225472,
+        "status": "AVAILABLE",
+        "verification_status": "VERIFIED",
+        "checksum": "sha256:d12bookworm-official",
+        "download_url": "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.raw",
+        "kernel_compat": "COMPATIBLE",
+        "notes": "Official Debian 12 bookworm genericcloud raw image (ext4 rootfs). Compatible with direct kernel boot.",
+    },
+    {
+        "id": "fedora-40",
+        "name": "Fedora Server 40",
+        "distro": "Fedora",
+        "version": "40 Server",
+        "arch": "x86_64",
+        "format": "raw",
+        "path": str(Path.home() / "ps023" / "images" / "fedora-40.raw"),
+        "disk_size_bytes": None,
+        "status": "NOT_DOWNLOADED",
+        "verification_status": "OFFICIAL",
+        "checksum": "sha256:fedora-40-official",
+        "download_url": "https://archives.fedoraproject.org/pub/archive/fedora/linux/releases/40/Cloud/x86_64/images/Fedora-Cloud-Base-Generic.x86_64-40-1.14.qcow2",
+        "kernel_compat": "REQUIRES_CONVERSION",
+        "notes": "Fedora Cloud Base image. Must be converted from QCOW2 to RAW format.",
+    },
+    {
+        "id": "rocky-9",
+        "name": "Rocky Linux 9",
+        "distro": "Rocky Linux",
+        "version": "9.4 (Blue Onyx)",
+        "arch": "x86_64",
+        "format": "raw",
+        "path": str(Path.home() / "ps023" / "images" / "rocky-9.raw"),
+        "disk_size_bytes": None,
+        "status": "NOT_DOWNLOADED",
+        "verification_status": "OFFICIAL",
+        "checksum": "sha256:rocky-9-official",
+        "download_url": "https://download.rockylinux.org/pub/rocky/9/images/x86_64/Rocky-9-GenericCloud-Base.latest.x86_64.qcow2",
+        "kernel_compat": "REQUIRES_CONVERSION",
+        "notes": "Rocky Linux 9 GenericCloud image. Requires QCOW2 to RAW conversion.",
+    },
+    {
+        "id": "almalinux-9",
+        "name": "AlmaLinux 9",
+        "distro": "AlmaLinux",
+        "version": "9.4 (Seafoam Ocelot)",
+        "arch": "x86_64",
+        "format": "raw",
+        "path": str(Path.home() / "ps023" / "images" / "almalinux-9.raw"),
+        "disk_size_bytes": None,
+        "status": "NOT_DOWNLOADED",
+        "verification_status": "OFFICIAL",
+        "checksum": "sha256:alma-9-official",
+        "download_url": "https://repo.almalinux.org/almalinux/9/cloud/x86_64/images/AlmaLinux-9-GenericCloud-latest.x86_64.qcow2",
+        "kernel_compat": "REQUIRES_CONVERSION",
+        "notes": "AlmaLinux 9 GenericCloud image. Requires QCOW2 to RAW conversion.",
+    },
+    {
+        "id": "opensuse-15-6",
+        "name": "openSUSE Leap 15.6",
+        "distro": "openSUSE",
+        "version": "15.6",
+        "arch": "x86_64",
+        "format": "raw",
+        "path": str(Path.home() / "ps023" / "images" / "opensuse-15-6.raw"),
+        "disk_size_bytes": None,
+        "status": "NOT_DOWNLOADED",
+        "verification_status": "OFFICIAL",
+        "checksum": "sha256:opensuse-15-official",
+        "download_url": "https://download.opensuse.org/distribution/leap/15.6/appliances/openSUSE-Leap-15.6-Minimal-VM.x86_64-Cloud.qcow2",
+        "kernel_compat": "REQUIRES_CONVERSION",
+        "notes": "openSUSE Leap 15.6 Cloud appliance. Requires QCOW2 to RAW conversion.",
+    },
+    {
+        "id": "arch-linux",
+        "name": "Arch Linux",
+        "distro": "Arch Linux",
+        "version": "Rolling (Latest)",
+        "arch": "x86_64",
+        "format": "raw",
+        "path": str(Path.home() / "ps023" / "images" / "arch-linux.raw"),
+        "disk_size_bytes": 2147483648,
+        "status": "INCOMPATIBLE_KERNEL",
+        "verification_status": "VERIFIED_INCOMPATIBLE",
+        "checksum": "sha256:08754e28d91b1680086c6211ef4df13559e766fff7cdb4006489b14b5d281f08",
+        "download_url": "https://geo.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2",
+        "kernel_compat": "INCOMPATIBLE_BTRFS",
+        "notes": "Official Arch Linux cloudimg uses Btrfs filesystem. Current direct-boot kernel (vmlinux.bin) has only ext4 support (CONFIG_BTRFS_FS disabled). An ext4-based raw disk image or Btrfs-compiled kernel is required.",
+    },
+]
 
 VM_FIELDS = {
     "name", "node_id", "worker_vm_id", "status", "vcpus",
@@ -73,11 +230,29 @@ NODE_FIELDS = {"url", "status", "memory_total_mb", "memory_schedulable_mb",
                "cpu_total", "vms_running", "last_heartbeat", "cgroups_enabled"}
 
 
+def _enforce_db_permissions(db_file):
+    p = Path(db_file)
+    if p.exists():
+        try:
+            p.chmod(0o600)
+        except OSError:
+            pass
+    for ext in ("-wal", "-shm", "-journal"):
+        aux = p.with_name(p.name + ext)
+        if aux.exists():
+            try:
+                aux.chmod(0o600)
+            except OSError:
+                pass
+
+
 @contextmanager
 def connect(path=None):
-    conn = sqlite3.connect(path or DB_PATH, timeout=10)
+    db_file = path or DB_PATH
+    conn = sqlite3.connect(db_file, timeout=10)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys=ON")
+    _enforce_db_permissions(db_file)
     try:
         yield conn
         conn.commit()
@@ -86,9 +261,12 @@ def connect(path=None):
         raise
     finally:
         conn.close()
+        _enforce_db_permissions(db_file)
 
 
 def init_db(path=None):
+    db_file = path or DB_PATH
+    _enforce_db_permissions(db_file)
     with connect(path) as c:
         c.executescript(SCHEMA)
         # Safe, idempotent migration for existing databases
@@ -113,6 +291,22 @@ def init_db(path=None):
         for col_name, col_def in new_cols:
             if col_name not in vm_cols:
                 cursor.execute(f"ALTER TABLE vms ADD COLUMN {col_name} {col_def}")
+
+        img_count = cursor.execute("SELECT count(*) FROM images").fetchone()[0]
+        if img_count == 0:
+            for img in DEFAULT_IMAGES:
+                cursor.execute(
+                    "INSERT INTO images (id, name, distro, version, arch, format, path, "
+                    "disk_size_bytes, status, verification_status, checksum, download_url, "
+                    "created_at, kernel_compat, notes) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (img["id"], img["name"], img["distro"], img["version"],
+                     img.get("arch", "x86_64"), img.get("format", "raw"), img.get("path"),
+                     img.get("disk_size_bytes"), img.get("status", "AVAILABLE"),
+                     img.get("verification_status", "VERIFIED"), img.get("checksum"),
+                     img.get("download_url"), time.time(),
+                     img.get("kernel_compat", "COMPATIBLE"), img.get("notes"))
+                )
 
 
 def _rows(cur):
@@ -275,3 +469,115 @@ def latest_decisions(limit=10, path=None):
     for r in rows:
         r["candidates"] = json.loads(r["candidates"])
     return rows
+
+
+# ---------- events ----------
+def record_event(event_type, message, level="INFO", details=None, source="controller", path=None):
+    details_str = json.dumps(details) if isinstance(details, (dict, list)) else (str(details) if details is not None else None)
+    with connect(path) as c:
+        c.execute(
+            "INSERT INTO events (at, event_type, level, message, details, source) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (time.time(), event_type, level, message, details_str, source),
+        )
+
+
+def latest_events(limit=50, event_type=None, level=None, path=None):
+    query = "SELECT * FROM events"
+    params = []
+    conditions = []
+    if event_type:
+        conditions.append("event_type = ?")
+        params.append(event_type)
+    if level:
+        conditions.append("level = ?")
+        params.append(level)
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    query += " ORDER BY at DESC, id DESC LIMIT ?"
+    params.append(limit)
+
+    with connect(path) as c:
+        rows = _rows(c.execute(query, params))
+    for r in rows:
+        if r.get("details"):
+            try:
+                r["details"] = json.loads(r["details"])
+            except Exception:
+                pass
+    return rows
+
+
+# ---------- images ----------
+def list_images(path=None):
+    with connect(path) as c:
+        return _rows(c.execute("SELECT * FROM images ORDER BY id"))
+
+
+def get_image(image_id, path=None):
+    with connect(path) as c:
+        r = c.execute("SELECT * FROM images WHERE id = ?", (image_id,)).fetchone()
+    return dict(r) if r else None
+
+
+def upsert_image(image_id, name, distro, version="1.0", arch="x86_64",
+                 format="raw", path_img=None, disk_size_bytes=None,
+                 status="AVAILABLE", verification_status="VERIFIED",
+                 checksum=None, download_url=None, kernel_compat="COMPATIBLE",
+                 notes=None, path=None):
+    with connect(path) as c:
+        c.execute(
+            "INSERT INTO images (id, name, distro, version, arch, format, path, "
+            "disk_size_bytes, status, verification_status, checksum, download_url, "
+            "created_at, kernel_compat, notes) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(id) DO UPDATE SET "
+            "name=excluded.name, distro=excluded.distro, version=excluded.version, "
+            "arch=excluded.arch, format=excluded.format, path=excluded.path, "
+            "disk_size_bytes=excluded.disk_size_bytes, status=excluded.status, "
+            "verification_status=excluded.verification_status, checksum=excluded.checksum, "
+            "download_url=excluded.download_url, kernel_compat=excluded.kernel_compat, "
+            "notes=excluded.notes",
+            (image_id, name, distro, version, arch, format, path_img,
+             disk_size_bytes, status, verification_status, checksum,
+             download_url, time.time(), kernel_compat, notes),
+        )
+
+
+def delete_image(image_id, path=None):
+    with connect(path) as c:
+        in_use = c.execute("SELECT count(*) FROM vms WHERE image = ?", (image_id,)).fetchone()[0]
+        if in_use > 0:
+            raise ValueError(f"Image '{image_id}' is in use by VM(s) and cannot be deleted")
+        c.execute("DELETE FROM images WHERE id = ?", (image_id,))
+
+
+# ---------- node metrics ----------
+def record_node_metrics(node_id, cpu_percent, memory_used_mb, memory_total_mb,
+                        memory_available_mb, memory_percent, timestamp=None,
+                        disk_used_mb=None, disk_total_mb=None, disk_percent=None,
+                        network_rx_kbps=None, network_tx_kbps=None, vms_running=0,
+                        path=None):
+    ts = timestamp if timestamp is not None else time.time()
+    with connect(path) as c:
+        c.execute(
+            "INSERT INTO node_metrics (node_id, timestamp, cpu_percent, memory_used_mb, "
+            "memory_total_mb, memory_available_mb, memory_percent, disk_used_mb, "
+            "disk_total_mb, disk_percent, network_rx_kbps, network_tx_kbps, vms_running) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (node_id, ts, cpu_percent, memory_used_mb, memory_total_mb,
+             memory_available_mb, memory_percent, disk_used_mb, disk_total_mb,
+             disk_percent, network_rx_kbps, network_tx_kbps, vms_running),
+        )
+
+
+def get_node_metrics(node_id, since=None, limit=120, path=None):
+    query = "SELECT * FROM node_metrics WHERE node_id = ?"
+    params = [node_id]
+    if since is not None:
+        query += " AND timestamp >= ?"
+        params.append(since)
+    query += " ORDER BY timestamp ASC LIMIT ?"
+    params.append(limit)
+    with connect(path) as c:
+        return _rows(c.execute(query, params))

@@ -28,6 +28,21 @@ MAX_SESSIONS = 5
 HELLO_TIMEOUT_S = 10
 SSH_CONNECT_TIMEOUT_S = 10
 _active = 0
+_session_lock = asyncio.Lock()
+
+# Optional known_hosts file path. VM host keys change whenever a VM is
+# recreated, and VMs sit on a private virtual network, so the default is None
+# (unverified host keys). Set PS023_SSH_KNOWN_HOSTS to enforce verification.
+KNOWN_HOSTS_PATH = os.environ.get("PS023_SSH_KNOWN_HOSTS", None)
+
+
+@router.get("/terminal-sessions")
+async def terminal_sessions():
+    async with _session_lock:
+        return {
+            "active_sessions": _active,
+            "max_sessions": MAX_SESSIONS,
+        }
 
 
 def _dim(value, default):
@@ -61,24 +76,24 @@ async def terminal(ws: WebSocket, vm_id: str):
     if not password:
         await ws.close(code=4500, reason="controller has no VM password")
         return
-    if _active >= MAX_SESSIONS:
-        await ws.close(code=4429, reason="too many terminal sessions")
-        return
 
-    _active += 1
+    async with _session_lock:
+        if _active >= MAX_SESSIONS:
+            await ws.close(code=4429, reason="too many terminal sessions")
+            return
+        _active += 1
     try:
         await _relay(ws, vm["ip_address"], password, hello)
     finally:
-        _active -= 1
+        async with _session_lock:
+            _active -= 1
 
 
 async def _relay(ws, ip, password, hello):
     user = os.environ.get("PS023_VM_USER", "rajyavardhan")
     try:
-        # VM host keys change whenever a VM is recreated, and the VMs sit on a
-        # private virtual network, so host keys are not checked.
         conn = await asyncssh.connect(
-            ip, username=user, password=password, known_hosts=None,
+            ip, username=user, password=password, known_hosts=KNOWN_HOSTS_PATH,
             connect_timeout=SSH_CONNECT_TIMEOUT_S)
     except (OSError, asyncssh.Error, asyncio.TimeoutError) as e:
         await ws.close(code=4502, reason="ssh failed: " + type(e).__name__)

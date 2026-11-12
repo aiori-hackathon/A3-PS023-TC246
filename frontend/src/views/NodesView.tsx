@@ -222,6 +222,22 @@ export const NodesView: React.FC<NodesViewProps> = ({ nodes, vms, events, onOpen
                           >
                             {isNodeB ? "Nested KVM Node" : "Host Fedora Node"}
                           </span>
+                          {node.cgroups_enabled && (
+                            <span
+                              style={{
+                                fontSize: "11px",
+                                fontFamily: "var(--font-mono)",
+                                padding: "2px 8px",
+                                borderRadius: "4px",
+                                backgroundColor: "rgba(22, 138, 98, 0.12)",
+                                border: "1px solid rgba(22, 138, 98, 0.3)",
+                                color: "var(--color-emerald-green)",
+                                fontWeight: 600,
+                              }}
+                            >
+                              cgroups v2
+                            </span>
+                          )}
                         </div>
                         <div style={{ fontSize: "12px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", marginTop: "3px" }}>
                           {node.url}

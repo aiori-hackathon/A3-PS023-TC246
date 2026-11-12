@@ -7,6 +7,7 @@ import subprocess
 import threading
 import time
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 
 import psutil
@@ -35,9 +36,17 @@ class VMManager:
     def __init__(self):
         VM_ROOT.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
+        self._vm_locks = {}
+        self._last_state = {}  # vm_id -> last known state ("running", "stopped", etc.)
         self._procs = {}  # vm_id -> Popen, so exited children get reaped
         self._unreaped = []  # exited VMMs we could not collect yet
         self._cgroups = CgroupManager()
+
+    def _vm_lock(self, vm_id):
+        with self._lock:
+            if vm_id not in self._vm_locks:
+                self._vm_locks[vm_id] = threading.Lock()
+            return self._vm_locks[vm_id]
 
     # ---------- paths and metadata ----------
     def _dir(self, vm_id):
@@ -57,6 +66,19 @@ class VMManager:
 
     def _ch(self, vm_id):
         return CloudHypervisor(str(self._sock(vm_id)))
+
+    @contextmanager
+    def _ch_session(self, vm_id):
+        ch = self._ch(vm_id)
+        if hasattr(ch, "__enter__") and hasattr(ch, "__exit__"):
+            with ch:
+                yield ch
+        else:
+            try:
+                yield ch
+            finally:
+                if hasattr(ch, "close"):
+                    ch.close()
 
     # ---------- create ----------
     def _free_slot(self):
@@ -190,6 +212,9 @@ class VMManager:
                 self._unreaped.append(proc)  # retried from _reap_pending()
         self._cgroups.remove_vm_cgroup(vm_id)
         self._cgroups.cleanup_empty_leftovers()
+        with self._lock:
+            self._vm_locks.pop(vm_id, None)
+            self._last_state.pop(vm_id, None)
 
     def _reap_pending(self):
         self._unreaped = [p for p in self._unreaped if p.poll() is None]
@@ -213,81 +238,89 @@ class VMManager:
         }
 
     def start(self, vm_id):
-        meta = self._meta(vm_id)
-        d = self._dir(vm_id)
-        if self._alive(vm_id):
-            if self._ch(vm_id).state() == "Running":
-                return
-            self._kill_hard(vm_id)  # idle or half-started VMM: begin clean
-        self._clean_runtime(vm_id)
-
-        # Prepare cgroup with verified limits before launching process
-        cg_info = self._cgroups.create_vm_cgroup(vm_id, meta["vcpus"], meta["memory_mb"])
-
-        log = open(d / "vmm.log", "ab")
-        proc = subprocess.Popen(
-            [CH_BIN, "--api-socket", f"path={self._sock(vm_id)}"],
-            stdin=subprocess.DEVNULL, stdout=log, stderr=log,
-            start_new_session=True,  # the setsid lesson: VMs outlive us
-        )
-        log.close()
-        self._procs[vm_id] = proc
-        (d / "vmm.pid").write_text(str(proc.pid))
-
-        if cg_info["enabled"]:
-            attached = self._cgroups.attach_vmm(vm_id, proc.pid)
-            meta["cgroups"] = attached
-            meta["cgroup_limits"] = cg_info["limits"] if attached else None
-        else:
-            meta["cgroups"] = False
-            meta["cgroup_limits"] = None
-        (d / "meta.json").write_text(json.dumps(meta, indent=2))
-
-        try:
-            end = time.time() + 5
-            while not self._sock(vm_id).exists():
-                if proc.poll() is not None or time.time() > end:
-                    raise VMError("cloud-hypervisor did not start; see vmm.log")
-                time.sleep(0.1)
-            ch = self._ch(vm_id)
-            ch.create(self._config(meta))
-            ch.boot()
-        except Exception:
-            self._kill_hard(vm_id)
+        with self._vm_lock(vm_id):
+            meta = self._meta(vm_id)
+            d = self._dir(vm_id)
+            if self._alive(vm_id):
+                with self._ch_session(vm_id) as ch:
+                    if ch.state() == "Running":
+                        return
+                self._kill_hard(vm_id)  # idle or half-started VMM: begin clean
             self._clean_runtime(vm_id)
-            raise
+
+            # Prepare cgroup with verified limits before launching process
+            cg_info = self._cgroups.create_vm_cgroup(vm_id, meta["vcpus"], meta["memory_mb"])
+
+            log = open(d / "vmm.log", "ab")
+            proc = subprocess.Popen(
+                [CH_BIN, "--api-socket", f"path={self._sock(vm_id)}"],
+                stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+                start_new_session=True,  # the setsid lesson: VMs outlive us
+            )
+            log.close()
+            self._procs[vm_id] = proc
+            (d / "vmm.pid").write_text(str(proc.pid))
+
+            if cg_info["enabled"]:
+                attached = self._cgroups.attach_vmm(vm_id, proc.pid)
+                meta["cgroups"] = attached
+                meta["cgroup_limits"] = cg_info["limits"] if attached else None
+            else:
+                meta["cgroups"] = False
+                meta["cgroup_limits"] = None
+            (d / "meta.json").write_text(json.dumps(meta, indent=2))
+
+            try:
+                end = time.time() + 5
+                while not self._sock(vm_id).exists():
+                    if proc.poll() is not None or time.time() > end:
+                        raise VMError("cloud-hypervisor did not start; see vmm.log")
+                    time.sleep(0.1)
+                with self._ch_session(vm_id) as ch:
+                    ch.create(self._config(meta))
+                    ch.boot()
+                self._last_state[vm_id] = "running"
+            except Exception:
+                self._kill_hard(vm_id)
+                self._clean_runtime(vm_id)
+                raise
 
     # ---------- stop: graceful first, then escalate ----------
     def stop(self, vm_id, graceful_timeout=30):
-        meta = self._meta(vm_id)
-        if not self._alive(vm_id):
+        with self._vm_lock(vm_id):
+            meta = self._meta(vm_id)
+            if not self._alive(vm_id):
+                self._clean_runtime(vm_id)
+                meta["cgroups"] = False
+                meta["cgroup_limits"] = None
+                (self._dir(vm_id) / "meta.json").write_text(json.dumps(meta, indent=2))
+                self._last_state[vm_id] = "stopped"
+                return "already-stopped"
+            with self._ch_session(vm_id) as ch:
+                self._quiet(ch.power_button)
+                if self._wait_exit(vm_id, graceful_timeout):
+                    self._clean_runtime(vm_id)
+                    meta["cgroups"] = False
+                    meta["cgroup_limits"] = None
+                    (self._dir(vm_id) / "meta.json").write_text(json.dumps(meta, indent=2))
+                    self._last_state[vm_id] = "stopped"
+                    return "graceful"
+                self._quiet(ch.shutdown)
+                self._quiet(ch.vmm_shutdown)
+            if self._wait_exit(vm_id, 5):
+                self._clean_runtime(vm_id)
+                meta["cgroups"] = False
+                meta["cgroup_limits"] = None
+                (self._dir(vm_id) / "meta.json").write_text(json.dumps(meta, indent=2))
+                self._last_state[vm_id] = "stopped"
+                return "forced-api"
+            method = self._kill_hard(vm_id)
             self._clean_runtime(vm_id)
             meta["cgroups"] = False
             meta["cgroup_limits"] = None
             (self._dir(vm_id) / "meta.json").write_text(json.dumps(meta, indent=2))
-            return "already-stopped"
-        ch = self._ch(vm_id)
-        self._quiet(ch.power_button)
-        if self._wait_exit(vm_id, graceful_timeout):
-            self._clean_runtime(vm_id)
-            meta["cgroups"] = False
-            meta["cgroup_limits"] = None
-            (self._dir(vm_id) / "meta.json").write_text(json.dumps(meta, indent=2))
-            return "graceful"
-        self._quiet(ch.shutdown)
-        self._quiet(ch.vmm_shutdown)
-        if self._wait_exit(vm_id, 5):
-            self._clean_runtime(vm_id)
-            meta["cgroups"] = False
-            meta["cgroup_limits"] = None
-            (self._dir(vm_id) / "meta.json").write_text(json.dumps(meta, indent=2))
-            return "forced-api"
-        method = self._kill_hard(vm_id)
-        self._clean_runtime(vm_id)
-        meta["cgroups"] = False
-        meta["cgroup_limits"] = None
-        (self._dir(vm_id) / "meta.json").write_text(json.dumps(meta, indent=2))
-        return method
+            self._last_state[vm_id] = "stopped"
+            return method
 
     def _kill_hard(self, vm_id):
         self._signal(vm_id, signal.SIGTERM)
@@ -311,11 +344,24 @@ class VMManager:
         self.stop(vm_id, graceful_timeout=10)
         shutil.rmtree(self._dir(vm_id))
 
-    def status(self, vm_id):
+    def status(self, vm_id, timeout=0.5):
         if not self._alive(vm_id):
+            self._last_state[vm_id] = "stopped"
             return "stopped"
-        s = self._ch(vm_id).state()
-        return {"Running": "running", "unreachable": "stopped"}.get(s, s.lower())
+        lock = self._vm_lock(vm_id)
+        if not lock.acquire(timeout=timeout):
+            return self._last_state.get(vm_id, "running" if self._alive(vm_id) else "stopped")
+        try:
+            try:
+                with self._ch_session(vm_id) as ch:
+                    s = ch.state()
+            except Exception:
+                s = "unreachable"
+            st = {"Running": "running", "unreachable": "stopped"}.get(s, s.lower())
+            self._last_state[vm_id] = st
+            return st
+        finally:
+            lock.release()
 
     def get(self, vm_id):
         meta = self._meta(vm_id)
