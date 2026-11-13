@@ -14,8 +14,8 @@ if (!defaultToken) {
   }
 }
 
-const controllerDashboard = path.resolve(import.meta.dirname, "../controller/dashboard");
 const srcControllerDashboard = path.resolve(import.meta.dirname, "../src/controller/dashboard");
+const controllerDashboard = srcControllerDashboard;
 
 function createProxy(target = "http://127.0.0.1:8000", ws = false) {
   return {

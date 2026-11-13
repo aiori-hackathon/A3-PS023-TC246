@@ -146,6 +146,7 @@ export const DecisionsView: React.FC<DecisionsViewProps> = ({ decisions }) => {
               <tr>
                 <th>Timestamp</th>
                 <th>Target VM</th>
+                <th>Policy</th>
                 <th>Requested RAM</th>
                 <th>Selected Node</th>
                 <th>Reason</th>
@@ -162,6 +163,21 @@ export const DecisionsView: React.FC<DecisionsViewProps> = ({ decisions }) => {
                   <td>
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: "12.5px", fontWeight: 600 }}>
                       {d.vm_id || "(pre-allocation)"}
+                    </span>
+                  </td>
+                  <td>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        padding: "2px 6px",
+                        borderRadius: "4px",
+                        backgroundColor: "rgba(185, 177, 165, 0.12)",
+                        color: "var(--text-primary)",
+                        fontFamily: "var(--font-mono)",
+                      }}
+                    >
+                      {d.policy || "memory_aware"}
                     </span>
                   </td>
                   <td>
@@ -199,22 +215,26 @@ export const DecisionsView: React.FC<DecisionsViewProps> = ({ decisions }) => {
                   <td style={{ fontSize: "13px", color: "var(--text-secondary)" }}>{d.reason}</td>
                   <td>
                     <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                      {d.candidates.map((c) => (
-                        <span
-                          key={c.node_id}
-                          title={`${c.node_id}: ${c.available_mb} MB available · ${c.verdict}`}
-                          style={{
-                            fontSize: "11px",
-                            padding: "2px 6px",
-                            borderRadius: "4px",
-                            backgroundColor: c.verdict === "eligible" ? "var(--primary-subtle)" : "rgba(185, 177, 165, 0.15)",
-                            color: c.verdict === "eligible" ? "var(--primary)" : "var(--text-muted)",
-                            fontFamily: "var(--font-mono)",
-                          }}
-                        >
-                          {c.node_id}: {c.verdict}
-                        </span>
-                      ))}
+                      {d.candidates.map((c) => {
+                        const isEligible = c.verdict === "eligible";
+                        return (
+                          <span
+                            key={c.node_id}
+                            title={`${c.node_id}: ${c.available_mb} MB available · ${c.verdict}`}
+                            style={{
+                              fontSize: "11px",
+                              padding: "2px 6px",
+                              borderRadius: "4px",
+                              backgroundColor: isEligible ? "var(--primary-subtle)" : "rgba(230, 83, 60, 0.12)",
+                              color: isEligible ? "var(--primary)" : "var(--danger)",
+                              border: isEligible ? "none" : "1px solid rgba(230, 83, 60, 0.25)",
+                              fontFamily: "var(--font-mono)",
+                            }}
+                          >
+                            {c.node_id}: {c.verdict}
+                          </span>
+                        );
+                      })}
                     </div>
                   </td>
                   <td style={{ textAlign: "right" }}>
@@ -311,6 +331,10 @@ export const DecisionsView: React.FC<DecisionsViewProps> = ({ decisions }) => {
 
             <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "20px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", padding: "10px", backgroundColor: "var(--bg-card)", borderRadius: "var(--radius-md)" }}>
+                <span style={{ color: "var(--text-muted)" }}>Policy:</span>
+                <strong style={{ fontFamily: "var(--font-mono)" }}>{selectedDecision.policy || "memory_aware"}</strong>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "10px", backgroundColor: "var(--bg-card)", borderRadius: "var(--radius-md)" }}>
                 <span style={{ color: "var(--text-muted)" }}>Requested Memory:</span>
                 <strong>{selectedDecision.requested_mb} MiB</strong>
               </div>
@@ -327,43 +351,46 @@ export const DecisionsView: React.FC<DecisionsViewProps> = ({ decisions }) => {
             </div>
 
             <h4 style={{ fontSize: "12.5px", textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-muted)", fontWeight: 700, marginBottom: "8px" }}>
-              Candidate Evaluations
+              Candidate Evaluations & Rejection Reasons
             </h4>
             <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "20px" }}>
-              {selectedDecision.candidates.map((c) => (
-                <div
-                  key={c.node_id}
-                  style={{
-                    padding: "10px 14px",
-                    borderRadius: "var(--radius-md)",
-                    border: "1px solid var(--border)",
-                    backgroundColor: "var(--bg-card)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    fontSize: "13px",
-                  }}
-                >
-                  <div>
-                    <strong>{c.node_id}</strong>
-                    <div style={{ fontSize: "11.5px", color: "var(--text-muted)" }}>
-                      Schedulable available: {c.available_mb} MiB
-                    </div>
-                  </div>
-                  <span
+              {selectedDecision.candidates.map((c) => {
+                const isEligible = c.verdict === "eligible";
+                return (
+                  <div
+                    key={c.node_id}
                     style={{
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      padding: "2px 8px",
-                      borderRadius: "99px",
-                      backgroundColor: c.verdict === "eligible" ? "var(--primary-subtle)" : "rgba(185, 177, 165, 0.15)",
-                      color: c.verdict === "eligible" ? "var(--primary)" : "var(--text-muted)",
+                      padding: "10px 14px",
+                      borderRadius: "var(--radius-md)",
+                      border: `1px solid ${isEligible ? "var(--border)" : "rgba(230, 83, 60, 0.3)"}`,
+                      backgroundColor: isEligible ? "var(--bg-card)" : "rgba(230, 83, 60, 0.04)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      fontSize: "13px",
                     }}
                   >
-                    {c.verdict}
-                  </span>
-                </div>
-              ))}
+                    <div>
+                      <strong>{c.node_id}</strong>
+                      <div style={{ fontSize: "11.5px", color: isEligible ? "var(--text-muted)" : "var(--danger)" }}>
+                        Schedulable available: {c.available_mb} MiB {c.verdict !== "eligible" && `· Verdict: ${c.verdict}`}
+                      </div>
+                    </div>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        padding: "2px 8px",
+                        borderRadius: "99px",
+                        backgroundColor: isEligible ? "var(--primary-subtle)" : "rgba(230, 83, 60, 0.15)",
+                        color: isEligible ? "var(--primary)" : "var(--danger)",
+                      }}
+                    >
+                      {c.verdict}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end" }}>

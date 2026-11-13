@@ -8,12 +8,13 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Path as FastPath
+from fastapi import Depends, FastAPI, HTTPException, Path as FastPath, Response
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 import database as db
+import metrics as prom_metrics
 import node_service as ns
 import reconcile as rc
 import vm_service as svc
@@ -229,6 +230,17 @@ def cluster_metrics():
         "cluster_memory_percent": mem_percent,
         "timestamp": time.time(),
     }
+
+
+@app.get("/metrics", dependencies=auth, response_class=Response)
+def get_prometheus_metrics():
+    """Prometheus exposition format cluster metrics endpoint.
+    
+    Exposes real cluster node, memory, VM, decision refusal, and failover recovery metrics.
+    Authentication: Requires valid Bearer token, matching other controller endpoints.
+    """
+    content = prom_metrics.generate_prometheus_metrics()
+    return Response(content=content, media_type="text/plain; version=0.0.4; charset=utf-8")
 
 
 # ---------- VMs ----------

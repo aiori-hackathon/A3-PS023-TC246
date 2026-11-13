@@ -389,6 +389,84 @@ export const NodesView: React.FC<NodesViewProps> = ({ nodes, vms, events, onOpen
             })}
           </div>
 
+          {/* Node State Transition Timeline */}
+          <div className="vc-table-container" style={{ marginBottom: "28px" }}>
+            <div style={{ padding: "18px 24px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div>
+                <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <Activity size={16} style={{ color: "var(--primary)" }} />
+                  <span>Node State & Heartbeat Transition Timeline</span>
+                </h3>
+                <p style={{ fontSize: "12.5px", color: "var(--text-muted)", marginTop: "2px" }}>
+                  Chronological record of node registrations, health status transitions, and heartbeat monitor updates
+                </p>
+              </div>
+            </div>
+
+            <div style={{ padding: "18px 24px" }}>
+              {(() => {
+                const nodeEvents = events.filter((e) =>
+                  e.source?.startsWith("node") ||
+                  e.event_type.includes("heartbeat") ||
+                  e.event_type.includes("node") ||
+                  e.message.toLowerCase().includes("healthy") ||
+                  e.message.toLowerCase().includes("node-a") ||
+                  e.message.toLowerCase().includes("node-b")
+                ).slice(0, 10);
+
+                if (nodeEvents.length === 0) {
+                  return (
+                    <div style={{ textAlign: "center", padding: "20px", color: "var(--text-muted)", fontSize: "13px" }}>
+                      No node transition events recorded yet.
+                    </div>
+                  );
+                }
+
+                return (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    {nodeEvents.map((ev) => (
+                      <div
+                        key={ev.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "10px 14px",
+                          borderRadius: "var(--radius-md)",
+                          backgroundColor: "var(--bg-card)",
+                          border: "1px solid var(--border)",
+                          fontSize: "12.5px",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                          <span
+                            style={{
+                              fontSize: "10px",
+                              fontWeight: 700,
+                              padding: "2px 6px",
+                              borderRadius: "4px",
+                              backgroundColor: ev.level === "ERROR" ? "var(--danger-subtle)" : ev.level === "WARNING" ? "var(--warning-subtle)" : "var(--primary-subtle)",
+                              color: ev.level === "ERROR" ? "var(--danger)" : ev.level === "WARNING" ? "var(--warning)" : "var(--primary)",
+                              fontFamily: "var(--font-mono)",
+                            }}
+                          >
+                            {ev.event_type}
+                          </span>
+                          <span style={{ color: "var(--text-primary)", fontWeight: 500 }}>
+                            {ev.message}
+                          </span>
+                        </div>
+                        <span style={{ color: "var(--text-muted)", fontSize: "11.5px", fontFamily: "var(--font-mono)" }}>
+                          {new Date(ev.at * 1000).toLocaleTimeString()}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+
           {/* Cluster Architecture Comparison Table */}
           <div className="vc-table-container">
             <div style={{ padding: "18px 24px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
