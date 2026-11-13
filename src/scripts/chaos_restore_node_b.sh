@@ -70,12 +70,13 @@ if [ "$MODE" = "worker" ]; then
 
   START_CMD="sudo systemctl start ps023-worker 2>/dev/null || (cd ~/ps023/worker && nohup python3 -m uvicorn main:app --host 0.0.0.0 --port 8002 > ~/worker.log 2>&1 &) || true"
 
+  SSH_OPTS="-o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts -o ConnectTimeout=5"
   if [ -n "${NODE_B_SSH_KEY:-}" ]; then
-    ssh -i "$NODE_B_SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=5 "$NODE_B_USER@$NODE_B_HOST" "$START_CMD"
+    ssh -i "$NODE_B_SSH_KEY" $SSH_OPTS "$NODE_B_USER@$NODE_B_HOST" "$START_CMD"
   elif [ -n "${NODE_B_SSH_PASS:-}" ] && command -v sshpass >/dev/null 2>&1; then
-    sshpass -p "$NODE_B_SSH_PASS" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 "$NODE_B_USER@$NODE_B_HOST" "$START_CMD"
+    sshpass -p "$NODE_B_SSH_PASS" ssh $SSH_OPTS "$NODE_B_USER@$NODE_B_HOST" "$START_CMD"
   else
-    ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 "$NODE_B_USER@$NODE_B_HOST" "$START_CMD"
+    ssh $SSH_OPTS "$NODE_B_USER@$NODE_B_HOST" "$START_CMD"
   fi
   echo "  Node B worker service started."
 elif [ "$MODE" = "network" ]; then
@@ -119,7 +120,7 @@ import sys, json
 vms = json.load(sys.stdin)
 for v in vms:
     ha_str = " [HA]" if v.get("ha") else ""
-    print(f"  VM {v[\"id\"]} ({v[\"name\"]}) -> Node: {v[\"node_id\"]} | Status: {v[\"status\"]}{ha_str}")
+    print("  VM %s (%s) -> Node: %s | Status: %s%s" % (v.get("id"), v.get("name"), v.get("node_id"), v.get("status"), ha_str))
 '
 
 NODE_B_RESOURCES=$(api_get "/nodes/node-b/resources" 2>/dev/null || echo "{}")

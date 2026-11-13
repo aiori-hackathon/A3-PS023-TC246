@@ -71,7 +71,7 @@ api_get "/nodes" | python3 -c '
 import sys, json
 nodes = json.load(sys.stdin)
 for n in nodes:
-    print(f"  * Node {n[\"id\"]}: status={n[\"status\"]} schedulable_mb={n.get(\"memory_schedulable_mb\")} vms_running={n.get(\"vms_running\", 0)}")
+    print("  * Node %s: status=%s schedulable_mb=%s vms_running=%s" % (n.get("id"), n.get("status"), n.get("memory_schedulable_mb"), n.get("vms_running", 0)))
 '
 
 echo "VMs:"
@@ -82,7 +82,7 @@ if not vms:
     print("  (no VMs deployed)")
 for v in vms:
     ha_str = "[HA]" if v.get("ha") else "[NON-HA]"
-    print(f"  * {v[\"id\"]} ({v[\"name\"]}) {ha_str}: Node={v[\"node_id\"]} Status={v[\"status\"]} IP={v.get(\"ip_address\")}")
+    print("  * %s (%s) %s: Node=%s Status=%s IP=%s" % (v.get("id"), v.get("name"), ha_str, v.get("node_id"), v.get("status"), v.get("ip_address")))
 '
 
 # 2. Inject failure based on selected mode
@@ -185,7 +185,7 @@ vms = json.load(sys.stdin)
 for v in vms:
     if v.get("ha"):
         rec = v.get("recovery_time_s", "n/a")
-        print(f"  * {v[\"id\"]} ({v[\"name\"]}) -> Node: {v[\"node_id\"]} | Status: {v[\"status\"]} | IP: {v.get(\"ip_address\")} | Recovery: {rec}s")
+        print("  * %s (%s) -> Node: %s | Status: %s | IP: %s | Recovery: %ss" % (v.get("id"), v.get("name"), v.get("node_id"), v.get("status"), v.get("ip_address"), rec))
 '
     EVACUATED=1
     break

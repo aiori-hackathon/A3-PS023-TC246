@@ -71,7 +71,7 @@ api_get "/nodes" | python3 -c '
 import sys, json
 nodes = json.load(sys.stdin)
 for n in nodes:
-    print(f"  * Node {n[\"id\"]}: status={n[\"status\"]} schedulable_mb={n.get(\"memory_schedulable_mb\")} vms_running={n.get(\"vms_running\", 0)}")
+    print("  * Node %s: status=%s schedulable_mb=%s vms_running=%s" % (n.get("id"), n.get("status"), n.get("memory_schedulable_mb"), n.get("vms_running", 0)))
 '
 
 echo "VMs:"
@@ -82,7 +82,7 @@ if not vms:
     print("  (no VMs deployed)")
 for v in vms:
     ha_str = "[HA]" if v.get("ha") else "[NON-HA]"
-    print(f"  * {v[\"id\"]} ({v[\"name\"]}) {ha_str}: Node={v[\"node_id\"]} Status={v[\"status\"]} IP={v.get(\"ip_address\")}")
+    print("  * %s (%s) %s: Node=%s Status=%s IP=%s" % (v.get("id"), v.get("name"), ha_str, v.get("node_id"), v.get("status"), v.get("ip_address")))
 '
 
 # 2. Inject failure based on selected mode
@@ -101,12 +101,13 @@ if [ "$MODE" = "worker" ]; then
   # Uses [c]loud-hypervisor bracket pattern so pkill does not match its own remote ssh shell.
   KILL_CMD="sudo systemctl stop ps023-worker && sudo pkill -9 -f '[c]loud-hypervisor' || true"
 
+  SSH_OPTS="-o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts -o ConnectTimeout=5"
   if [ -n "${NODE_B_SSH_KEY:-}" ]; then
-    ssh -i "$NODE_B_SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=5 "$NODE_B_USER@$NODE_B_HOST" "$KILL_CMD"
+    ssh -i "$NODE_B_SSH_KEY" $SSH_OPTS "$NODE_B_USER@$NODE_B_HOST" "$KILL_CMD"
   elif [ -n "${NODE_B_SSH_PASS:-}" ] && command -v sshpass >/dev/null 2>&1; then
-    sshpass -p "$NODE_B_SSH_PASS" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 "$NODE_B_USER@$NODE_B_HOST" "$KILL_CMD"
+    sshpass -p "$NODE_B_SSH_PASS" ssh $SSH_OPTS "$NODE_B_USER@$NODE_B_HOST" "$KILL_CMD"
   else
-    ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 "$NODE_B_USER@$NODE_B_HOST" "$KILL_CMD"
+    ssh $SSH_OPTS "$NODE_B_USER@$NODE_B_HOST" "$KILL_CMD"
   fi
   echo "  Node B worker stopped and all cloud-hypervisor processes killed (VMs gone)."
 elif [ "$MODE" = "worker-preserve-vms" ]; then
@@ -116,12 +117,13 @@ elif [ "$MODE" = "worker-preserve-vms" ]; then
   # Mode 'worker-preserve-vms': systemctl stop only (VMs keep running; tests fencing on return)
   KILL_CMD="sudo systemctl stop ps023-worker"
 
+  SSH_OPTS="-o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts -o ConnectTimeout=5"
   if [ -n "${NODE_B_SSH_KEY:-}" ]; then
-    ssh -i "$NODE_B_SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=5 "$NODE_B_USER@$NODE_B_HOST" "$KILL_CMD"
+    ssh -i "$NODE_B_SSH_KEY" $SSH_OPTS "$NODE_B_USER@$NODE_B_HOST" "$KILL_CMD"
   elif [ -n "${NODE_B_SSH_PASS:-}" ] && command -v sshpass >/dev/null 2>&1; then
-    sshpass -p "$NODE_B_SSH_PASS" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 "$NODE_B_USER@$NODE_B_HOST" "$KILL_CMD"
+    sshpass -p "$NODE_B_SSH_PASS" ssh $SSH_OPTS "$NODE_B_USER@$NODE_B_HOST" "$KILL_CMD"
   else
-    ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 "$NODE_B_USER@$NODE_B_HOST" "$KILL_CMD"
+    ssh $SSH_OPTS "$NODE_B_USER@$NODE_B_HOST" "$KILL_CMD"
   fi
   echo "  Node B worker stopped. Cloud-hypervisor processes remain running to test recovery fencing."
 elif [ "$MODE" = "network" ]; then
@@ -183,7 +185,7 @@ vms = json.load(sys.stdin)
 for v in vms:
     if v.get("ha"):
         rec = v.get("recovery_time_s", "n/a")
-        print(f"  * {v[\"id\"]} ({v[\"name\"]}) -> Node: {v[\"node_id\"]} | Status: {v[\"status\"]} | IP: {v.get(\"ip_address\")} | Recovery: {rec}s")
+        print("  * %s (%s) -> Node: %s | Status: %s | IP: %s | Recovery: %ss" % (v.get("id"), v.get("name"), v.get("node_id"), v.get("status"), v.get("ip_address"), rec))
 '
     EVACUATED=1
     break

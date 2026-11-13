@@ -120,7 +120,7 @@ import sys, json
 vms = json.load(sys.stdin)
 for v in vms:
     ha_str = " [HA]" if v.get("ha") else ""
-    print(f"  VM {v[\"id\"]} ({v[\"name\"]}) -> Node: {v[\"node_id\"]} | Status: {v[\"status\"]}{ha_str}")
+    print("  VM %s (%s) -> Node: %s | Status: %s%s" % (v.get("id"), v.get("name"), v.get("node_id"), v.get("status"), ha_str))
 '
 
 NODE_B_RESOURCES=$(api_get "/nodes/node-b/resources" 2>/dev/null || echo "{}")

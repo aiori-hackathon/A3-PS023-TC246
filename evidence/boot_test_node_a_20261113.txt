@@ -1,0 +1,28 @@
+======================================================================
+ Cloud Hypervisor v54.0.0 on Node A (Host Fedora Linux)
+----------------------------------------------------------------------
+ Host CPU Model                : AMD Ryzen 7 7445HS w/ Radeon 740M Graphics
+ Physical Cores Available      : 12 vCPUs
+ Virtualization Type           : KVM (/dev/kvm)
+======================================================================
+
+=== Real MicroVM Boot & SSH Latency Benchmark via Controller (Pinned to node-a, 5 Runs) ===
+-------------------------------------------------------------------------------------------------
+Run | VM ID       | Node   | IP             | Status RUNNING | SSH Ready (Full Boot) | Transport
+----+-------------+--------+----------------+----------------+-----------------------+------------
+  1 | vm-58114d0a | node-a | 192.168.100.10 | 0.934 s        | 7.518 s               | local-bridge
+  2 | vm-742621ed | node-a | 192.168.100.10 | 0.923 s        | 7.058 s               | local-bridge
+  3 | vm-b1fdad1e | node-a | 192.168.100.10 | 0.899 s        | 7.779 s               | local-bridge
+  4 | vm-367566ca | node-a | 192.168.100.10 | 0.942 s        | 7.826 s               | local-bridge
+  5 | vm-c07cdac6 | node-a | 192.168.100.10 | 0.997 s        | 8.040 s               | local-bridge
+-------------------------------------------------------------------------------------------------
+Metric 1: Controller API Create -> Status RUNNING (5 runs)
+  Min    : 0.899 s
+  Median : 0.934 s
+  Max    : 0.997 s
+
+Metric 2: Real Full Guest Boot (Create -> SSH Ready, 5 runs)
+  Min    : 7.058 s
+  Median : 7.779 s
+  Max    : 8.040 s
+=================================================================================================
