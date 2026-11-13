@@ -84,7 +84,10 @@ CREATE TABLE IF NOT EXISTS images (
     download_url TEXT,
     created_at REAL NOT NULL,
     kernel_compat TEXT DEFAULT 'COMPATIBLE',
-    notes TEXT
+    notes TEXT,
+    kernel_path TEXT,
+    initrd_path TEXT,
+    cmdline TEXT DEFAULT 'console=ttyS0 root=/dev/vda1'
 );
 CREATE TABLE IF NOT EXISTS node_metrics (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -217,6 +220,44 @@ DEFAULT_IMAGES = [
         "kernel_compat": "INCOMPATIBLE_BTRFS",
         "notes": "Official Arch Linux cloudimg uses Btrfs filesystem. Current direct-boot kernel (vmlinux.bin) has only ext4 support (CONFIG_BTRFS_FS disabled). An ext4-based raw disk image or Btrfs-compiled kernel is required.",
     },
+    {
+        "id": "alpine-3-20",
+        "name": "Alpine Linux 3.20 (virt)",
+        "distro": "Alpine",
+        "version": "3.20.3",
+        "arch": "x86_64",
+        "format": "raw",
+        "path": str(Path.home() / "ps023" / "images" / "alpine-3-20.raw"),
+        "disk_size_bytes": 134217728,
+        "status": "NOT_DOWNLOADED",
+        "verification_status": "OFFICIAL",
+        "checksum": "sha256:81df854fbd7327d293c726b1eeeb82061d3bc8f5a86a6f77eea720f6be372261",
+        "download_url": "https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/x86_64/alpine-virt-3.20.3-x86_64.iso",
+        "kernel_compat": "COMPATIBLE",
+        "kernel_path": "/boot/vmlinuz-virt",
+        "initrd_path": "/boot/initramfs-virt",
+        "cmdline": "console=ttyS0 root=/dev/vda1 modules=ext4,virtio_pci,virtio_net",
+        "notes": "Official Alpine Linux 3.20 virt image. Direct kernel boot parameters: console=ttyS0 root=/dev/vda1. Status: not boot-tested.",
+    },
+    {
+        "id": "cirros-0-6-2",
+        "name": "CirrOS 0.6.2",
+        "distro": "CirrOS",
+        "version": "0.6.2",
+        "arch": "x86_64",
+        "format": "raw",
+        "path": str(Path.home() / "ps023" / "images" / "cirros-0.6.2-x86_64-disk.img"),
+        "disk_size_bytes": 16777216,
+        "status": "NOT_DOWNLOADED",
+        "verification_status": "OFFICIAL",
+        "checksum": "sha256:07e44a73e54c94d988028515403c1ed762055e01b83a767edf3c2b387f78ce00",
+        "download_url": "https://download.cirros-cloud.net/0.6.2/cirros-0.6.2-x86_64-disk.img",
+        "kernel_compat": "COMPATIBLE",
+        "kernel_path": "/boot/vmlinuz",
+        "initrd_path": "/boot/initrd.img",
+        "cmdline": "console=ttyS0 root=/dev/vda1 ro",
+        "notes": "Official CirrOS 0.6.2 minimal image. Direct kernel boot parameters: console=ttyS0 root=/dev/vda1 ro. Status: not boot-tested. Secondary MD5: c8fc807773e5354afe61636071771906.",
+    },
 ]
 
 VM_FIELDS = {
@@ -292,20 +333,32 @@ def init_db(path=None):
             if col_name not in vm_cols:
                 cursor.execute(f"ALTER TABLE vms ADD COLUMN {col_name} {col_def}")
 
-        img_count = cursor.execute("SELECT count(*) FROM images").fetchone()[0]
-        if img_count == 0:
-            for img in DEFAULT_IMAGES:
+        img_cols = {col[1] for col in cursor.execute("PRAGMA table_info(images)").fetchall()}
+        new_img_cols = [
+            ("kernel_path", "TEXT"),
+            ("initrd_path", "TEXT"),
+            ("cmdline", "TEXT DEFAULT 'console=ttyS0 root=/dev/vda1'"),
+        ]
+        for col_name, col_def in new_img_cols:
+            if col_name not in img_cols:
+                cursor.execute(f"ALTER TABLE images ADD COLUMN {col_name} {col_def}")
+
+        for img in DEFAULT_IMAGES:
+            existing = cursor.execute("SELECT 1 FROM images WHERE id = ?", (img["id"],)).fetchone()
+            if not existing:
                 cursor.execute(
                     "INSERT INTO images (id, name, distro, version, arch, format, path, "
                     "disk_size_bytes, status, verification_status, checksum, download_url, "
-                    "created_at, kernel_compat, notes) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "created_at, kernel_compat, notes, kernel_path, initrd_path, cmdline) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (img["id"], img["name"], img["distro"], img["version"],
                      img.get("arch", "x86_64"), img.get("format", "raw"), img.get("path"),
                      img.get("disk_size_bytes"), img.get("status", "AVAILABLE"),
                      img.get("verification_status", "VERIFIED"), img.get("checksum"),
                      img.get("download_url"), time.time(),
-                     img.get("kernel_compat", "COMPATIBLE"), img.get("notes"))
+                     img.get("kernel_compat", "COMPATIBLE"), img.get("notes"),
+                     img.get("kernel_path"), img.get("initrd_path"),
+                     img.get("cmdline", "console=ttyS0 root=/dev/vda1"))
                 )
 
 
@@ -524,23 +577,26 @@ def upsert_image(image_id, name, distro, version="1.0", arch="x86_64",
                  format="raw", path_img=None, disk_size_bytes=None,
                  status="AVAILABLE", verification_status="VERIFIED",
                  checksum=None, download_url=None, kernel_compat="COMPATIBLE",
-                 notes=None, path=None):
+                 notes=None, kernel_path=None, initrd_path=None,
+                 cmdline="console=ttyS0 root=/dev/vda1", path=None):
     with connect(path) as c:
         c.execute(
             "INSERT INTO images (id, name, distro, version, arch, format, path, "
             "disk_size_bytes, status, verification_status, checksum, download_url, "
-            "created_at, kernel_compat, notes) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            "created_at, kernel_compat, notes, kernel_path, initrd_path, cmdline) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(id) DO UPDATE SET "
             "name=excluded.name, distro=excluded.distro, version=excluded.version, "
             "arch=excluded.arch, format=excluded.format, path=excluded.path, "
             "disk_size_bytes=excluded.disk_size_bytes, status=excluded.status, "
             "verification_status=excluded.verification_status, checksum=excluded.checksum, "
             "download_url=excluded.download_url, kernel_compat=excluded.kernel_compat, "
-            "notes=excluded.notes",
+            "notes=excluded.notes, kernel_path=excluded.kernel_path, "
+            "initrd_path=excluded.initrd_path, cmdline=excluded.cmdline",
             (image_id, name, distro, version, arch, format, path_img,
              disk_size_bytes, status, verification_status, checksum,
-             download_url, time.time(), kernel_compat, notes),
+             download_url, time.time(), kernel_compat, notes,
+             kernel_path, initrd_path, cmdline),
         )
 
 
@@ -549,7 +605,9 @@ def delete_image(image_id, path=None):
         in_use = c.execute("SELECT count(*) FROM vms WHERE image = ?", (image_id,)).fetchone()[0]
         if in_use > 0:
             raise ValueError(f"Image '{image_id}' is in use by VM(s) and cannot be deleted")
-        c.execute("DELETE FROM images WHERE id = ?", (image_id,))
+        r = c.execute("DELETE FROM images WHERE id = ?", (image_id,))
+        if r.rowcount == 0:
+            raise KeyError(f"Image '{image_id}' not found")
 
 
 # ---------- node metrics ----------

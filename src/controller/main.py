@@ -246,6 +246,11 @@ def get_prometheus_metrics():
 # ---------- VMs ----------
 @app.post("/vms", status_code=201, dependencies=auth)
 def create_vm(req: CreateVM):
+    if req.image:
+        img = db.get_image(req.image)
+        if not img:
+            raise HTTPException(status_code=422, detail=f"unknown image '{req.image}'")
+
     target = req.target_node
     if target and target != "auto":
         known = {n["id"] for n in db.list_nodes()}
@@ -458,6 +463,8 @@ def delete_image(image_id: ImageId):
     try:
         db.delete_image(image_id)
         db.record_event("IMAGE_DELETED", f"Unregistered OS image '{image_id}'", details={"image_id": image_id})
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
 
