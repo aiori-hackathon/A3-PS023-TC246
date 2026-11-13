@@ -50,7 +50,8 @@ CREATE TABLE IF NOT EXISTS decisions (
     requested_mb INTEGER NOT NULL,
     selected TEXT,
     reason TEXT NOT NULL,
-    candidates TEXT NOT NULL
+    candidates TEXT NOT NULL,
+    policy TEXT DEFAULT 'memory_aware'
 );
 CREATE TABLE IF NOT EXISTS stale_vm_tombstones (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -333,6 +334,10 @@ def init_db(path=None):
             if col_name not in vm_cols:
                 cursor.execute(f"ALTER TABLE vms ADD COLUMN {col_name} {col_def}")
 
+        dec_cols = {col[1] for col in cursor.execute("PRAGMA table_info(decisions)").fetchall()}
+        if "policy" not in dec_cols:
+            cursor.execute("ALTER TABLE decisions ADD COLUMN policy TEXT DEFAULT 'memory_aware'")
+
         img_cols = {col[1] for col in cursor.execute("PRAGMA table_info(images)").fetchall()}
         new_img_cols = [
             ("kernel_path", "TEXT"),
@@ -506,12 +511,13 @@ def mark_tombstone_fenced(tombstone_id, path=None):
 
 # ---------- scheduler decisions ----------
 def record_decision(decision, vm_id=None, path=None):
+    policy = getattr(decision, "policy", "memory_aware") or "memory_aware"
     with connect(path) as c:
         c.execute(
             "INSERT INTO decisions (vm_id, at, requested_mb, selected, reason, "
-            "candidates) VALUES (?, ?, ?, ?, ?, ?)",
+            "candidates, policy) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (vm_id, time.time(), decision.requested_mb, decision.selected,
-             decision.reason, json.dumps(decision.candidates)),
+             decision.reason, json.dumps(decision.candidates), policy),
         )
 
 
@@ -521,6 +527,7 @@ def latest_decisions(limit=10, path=None):
             "SELECT * FROM decisions ORDER BY id DESC LIMIT ?", (limit,)))
     for r in rows:
         r["candidates"] = json.loads(r["candidates"])
+        r.setdefault("policy", "memory_aware")
     return rows
 
 

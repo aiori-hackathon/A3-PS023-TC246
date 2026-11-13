@@ -151,6 +151,23 @@ def test_scheduler_preview_unknown_target_node(client):
     assert res.status_code == 422
 
 
+def test_scheduler_preview_with_policies(client):
+    # Preview with best_fit policy
+    body = {"memory_mb": 1024, "vcpus": 1, "policy": "best_fit"}
+    res = client.post("/scheduler/preview", json=body, headers=AUTH)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["policy"] == "best_fit"
+    assert "policy_choices" in data
+    assert "memory_aware" in data["policy_choices"]
+    assert "first_fit" in data["policy_choices"]
+    assert "best_fit" in data["policy_choices"]
+    # Node B has 2048 schedulable, Node A has 6144 schedulable.
+    # best_fit chooses Node B (smallest sufficient memory)
+    assert data["policy_choices"]["best_fit"]["selected"] == "node-b"
+    assert data["policy_choices"]["memory_aware"]["selected"] == "node-a"
+
+
 # ---------- /images tests ----------
 def test_images_list_and_get(client):
     res = client.get("/images", headers=AUTH)

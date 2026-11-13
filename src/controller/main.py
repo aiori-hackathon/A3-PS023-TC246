@@ -95,12 +95,14 @@ class CreateVM(BaseModel):
     user_data: str | None = None
     tags: list[str] = Field(default_factory=list)
     target_node: str | None = None
+    policy: str | None = None
 
 
 class SchedulerPreviewRequest(BaseModel):
     memory_mb: int = Field(ge=128, le=8192)
     vcpus: int = Field(default=1, ge=1, le=8)
     target_node: str | None = None
+    policy: str | None = None
 
 
 class ImportImageRequest(BaseModel):
@@ -257,17 +259,21 @@ def create_vm(req: CreateVM):
         if target not in known:
             raise HTTPException(status_code=422, detail=f"unknown target_node '{target}'")
 
-    return svc.create_vm(
-        name=req.name,
-        vcpus=req.vcpus,
-        memory_mb=req.memory_mb,
-        disk_gb=req.disk_gb,
-        ha=req.ha,
-        image=req.image,
-        user_data=req.user_data,
-        tags=req.tags,
-        target_node=target,
-    )
+    kwargs = {
+        "name": req.name,
+        "vcpus": req.vcpus,
+        "memory_mb": req.memory_mb,
+        "disk_gb": req.disk_gb,
+        "ha": req.ha,
+        "image": req.image,
+        "user_data": req.user_data,
+        "tags": req.tags,
+        "target_node": target,
+    }
+    if req.policy is not None:
+        kwargs["policy"] = req.policy
+
+    return svc.create_vm(**kwargs)
 
 
 @app.get("/vms", dependencies=auth)
@@ -335,14 +341,26 @@ def scheduler_preview(req: SchedulerPreviewRequest):
     if target and target not in all_nodes:
         raise HTTPException(status_code=422, detail=f"unknown target_node '{target}'")
 
-    decision = place(views, req.memory_mb, target_node=target)
+    decision = place(views, req.memory_mb, target_node=target, policy=req.policy)
+
+    policy_choices = {}
+    for pol in ("memory_aware", "first_fit", "best_fit"):
+        d_pol = place(views, req.memory_mb, target_node=target, policy=pol)
+        policy_choices[pol] = {
+            "selected": d_pol.selected,
+            "reason": d_pol.reason,
+            "policy": pol,
+        }
+
     return {
         "requested_mb": req.memory_mb,
         "requested_vcpus": req.vcpus,
+        "policy": decision.policy,
         "recommended_node": decision.selected,
         "reason": decision.reason,
         "can_accommodate": decision.selected is not None,
         "nodes": candidates_info,
+        "policy_choices": policy_choices,
     }
 
 

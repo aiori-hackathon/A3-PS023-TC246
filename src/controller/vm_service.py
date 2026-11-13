@@ -47,13 +47,13 @@ def node_views(path=None, down=()):
 
 def create_vm(name, vcpus, memory_mb, disk_gb=4, path=None,
               ha=False, image="ubuntu-24-04", user_data=None, tags=None,
-              target_node=None):
+              target_node=None, policy=None):
     ns.poll_all(path)
     down = set()  # nodes that failed during this request
     refused = {}  # node id -> why it failed, so the final error can say so
     while True:
         with _place_lock:
-            decision = place(node_views(path, down), memory_mb, target_node=target_node)
+            decision = place(node_views(path, down), memory_mb, target_node=target_node, policy=policy)
             for c in decision.candidates:
                 why = refused.get(c["node_id"])
                 if why:
