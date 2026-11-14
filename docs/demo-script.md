@@ -39,30 +39,30 @@
    READY.
    ```
 
-3. **Open Dashboard**:
+3. **Open Dashboard** [NOT VERIFIED: assets served, views not viewed with human eyes until confirmed by operator]:
    - Open browser at `http://127.0.0.1:8000/dashboard/`.
    - Enter `PS023_API_TOKEN` (never paste or speak on screen).
    - Point out: Real-time 3D cluster topology, active nodes, hardware resource meters.
 
 ---
 
-## Act 1: Architecture & Resilient Dashboard (2 minutes)
+## Act 1: Architecture & Resilient Dashboard (2 minutes) [NOT VERIFIED: assets served, views not viewed with human eyes until confirmed by operator]
 
 **Talking Points**:
 - PS-023 orchestrates Cloud Hypervisor MicroVMs across heterogeneous compute nodes using direct KVM virtualization.
 - Controller communicates with Worker daemons via authenticated REST APIs with strict timeouts and heartbeat leases.
-- Tour the Dashboard tabs:
-  - **Overview**: Real-time cluster status, active VM counter, schedulable RAM.
+- Tour the Dashboard tabs (to be verified live on screen):
+  - **Overview** [Claim NOT VERIFIED live]: Real-time cluster status, active VM counter, schedulable RAM.
   - **Nodes**: Live node cards (`node-a` 12 vCPUs / 16GB, `node-b` 4 vCPUs / 4GB), memory headroom, cgroups v2 status.
   - **VMs**: Deployed guests, IP assignments, direct console actions.
   - **Decisions**: Real-time structured placement reasoning log.
-  - **Images**: Verified OS catalog featuring Ubuntu 24.04 LTS, Debian 12, Alpine 3.20, and CirrOS with SHA-256 checksums.
-  - **Terminal**: In-browser WebSocket terminal into running MicroVMs without exposing guest SSH publicly.
+  - **Images**: OS catalog featuring Ubuntu 24.04 LTS, Debian 12, Alpine 3.20, and CirrOS with checksums (Debian/Alpine/CirrOS catalog entries marked "not boot-tested").
+  - **Terminal** [Claim NOT VERIFIED live]: In-browser WebSocket terminal into running MicroVMs without exposing guest SSH publicly.
   - **Failover**: Dedicated cluster high-availability monitor.
 
 ---
 
-## Act 2: Pluggable Scheduling & Placement Preview (2 minutes)
+## Act 2: Pluggable Scheduling & Placement Preview (2 minutes) [VERIFIED: evidence in controller API responses]
 
 Demonstrate the three placement algorithms (`memory_aware`, `best_fit`, `first_fit`) and live preview.
 
@@ -82,17 +82,20 @@ Demonstrate the three placement algorithms (`memory_aware`, `best_fit`, `first_f
 
 ---
 
-## Act 3: MicroVM Boot & SSH Latency Benchmark (2 minutes)
+## Act 3: MicroVM Boot & SSH Latency Benchmark (2 minutes) [VERIFIED: real benchmark evidence]
 
 Demonstrate sub-second microVM creation and real Linux guest boot speed.
 
-1. **Show Benchmarked Latencies (`evidence/boot_test_fallback_20261114.txt`)**:
+1. **Show Benchmarked Latency Ranges**:
    - **Node A (Direct Host KVM)**:
-     - API Create -> Status `RUNNING`: **0.786 s** median (min: 0.772s, max: 0.870s)
-     - Full Boot (Create -> Guest SSH Ready): **7.9 s – 16.1 s**
+     - API Create -> Status `RUNNING`: **0.772 s – 0.997 s**
+     - Full Boot (Create -> Guest SSH Ready): **7.058 s – 16.398 s** (range across 15 pooled runs; min 7.058 s, median 8.372 s, max 16.398 s)
+     - Evidence files: `evidence/boot_node_a_bimodality_20261114.txt`, `evidence/boot_test_fallback_20261114.txt`, `evidence/boot_test_node_a_20261113.txt`
+     - Bimodality note: Kernel boot is invariant (327–474 ms); SSH ready ranges from ~7–8 s up to ~14–16 s. Hypothesized in-guest cause (observed in telemetry for 1 of 5 fresh runs) is intermittent network stalls in `pollinate.service` (up to 6.5 s) when querying `entropy.ubuntu.com` over bridge NAT; 16 s runs have no telemetry.
    - **Node B (Nested KVM)**:
-     - API Create -> Status `RUNNING`: **3.497 s** median
-     - Full Boot (Create -> Guest SSH Ready): **13.1 s** median
+     - API Create -> Status `RUNNING`: **3.222 s – 3.994 s** (5 runs; median 3.497 s)
+     - Full Boot (Create -> Guest SSH Ready): **11.775 s – 19.027 s** (5 runs; median 13.130 s)
+     - Evidence file: `evidence/boot_test_fallback_20261114.txt`
 
 2. **Live Single-VM Launch**:
    ```bash
