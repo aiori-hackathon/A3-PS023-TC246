@@ -245,7 +245,7 @@ cd ~/ps023
 ```
 *Expected Output*:
 ```text
-================== 162 passed, 2 skipped, 1 warning in ~13s ==================
+================== 180 passed, 6 skipped, 1 warning in 13.42s ==================
 ```
 
 ---

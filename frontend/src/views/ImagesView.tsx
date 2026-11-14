@@ -10,6 +10,7 @@ import {
   RefreshCw,
   ExternalLink,
   ShieldCheck,
+  ShieldAlert,
   FolderOpen,
   Info,
   Copy,
@@ -306,8 +307,17 @@ export const ImagesView: React.FC<ImagesViewProps> = ({ images, vms, onRefresh }
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <span style={{ color: "var(--text-muted)" }}>Verification:</span>
-                    <span style={{ display: "flex", alignItems: "center", gap: "4px", color: isAvail ? "var(--primary)" : "var(--text-secondary)" }}>
-                      <ShieldCheck size={13} />
+                    <span style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      color: img.verification_status === "UNVERIFIED"
+                        ? "var(--text-muted)"
+                        : isAvail
+                        ? "var(--primary)"
+                        : "var(--text-secondary)"
+                    }}>
+                      {img.verification_status === "UNVERIFIED" ? <ShieldAlert size={13} /> : <ShieldCheck size={13} />}
                       <span>{img.verification_status}</span>
                     </span>
                   </div>

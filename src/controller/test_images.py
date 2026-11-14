@@ -54,7 +54,8 @@ def test_image_catalog_includes_alpine_and_cirros():
     cirros = img_map["cirros-0-6-2"]
     assert cirros["distro"] == "CirrOS"
     assert cirros["version"] == "0.6.2"
-    assert "07e44a73e54c94d988028515403c1ed762055e01b83a767edf3c2b387f78ce00" in cirros["checksum"]
+    assert "c8fc807773e5354afe61636071771906" in cirros["checksum"]
+    assert "md5:" in cirros["checksum"]
     assert cirros["download_url"].startswith("https://download.cirros-cloud.net/0.6.2/")
     assert cirros["kernel_path"] == "/boot/vmlinuz"
     assert cirros["initrd_path"] == "/boot/initrd.img"

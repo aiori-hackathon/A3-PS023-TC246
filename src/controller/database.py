@@ -250,14 +250,14 @@ DEFAULT_IMAGES = [
         "path": str(Path.home() / "ps023" / "images" / "cirros-0.6.2-x86_64-disk.img"),
         "disk_size_bytes": 16777216,
         "status": "NOT_DOWNLOADED",
-        "verification_status": "OFFICIAL_MD5_UNOFFICIAL_SHA256",
-        "checksum": "sha256:07e44a73e54c94d988028515403c1ed762055e01b83a767edf3c2b387f78ce00",
+        "verification_status": "OFFICIAL_MD5",
+        "checksum": "md5:c8fc807773e5354afe61636071771906",
         "download_url": "https://download.cirros-cloud.net/0.6.2/cirros-0.6.2-x86_64-disk.img",
         "kernel_compat": "COMPATIBLE",
         "kernel_path": "/boot/vmlinuz",
         "initrd_path": "/boot/initrd.img",
         "cmdline": "console=ttyS0 root=/dev/vda1 ro",
-        "notes": "CirrOS 0.6.2 minimal image (not downloaded). Official host publishes MD5SUMS only (c8fc807773e5354afe61636071771906); SHA-256 is unofficial/locally computed. Status: not boot-tested.",
+        "notes": "Official CirrOS 0.6.2 minimal image (not downloaded). Official MD5 from upstream MD5SUMS (c8fc807773e5354afe61636071771906). Status: not boot-tested.",
     },
 ]
 
@@ -365,6 +365,64 @@ def init_db(path=None):
                      img.get("kernel_path"), img.get("initrd_path"),
                      img.get("cmdline", "console=ttyS0 root=/dev/vda1"))
                 )
+
+        # Idempotent startup migration for image catalog integrity
+        # 1. Relabel ubuntu-24-04 from VERIFIED to COMPUTED_LOCALLY and ensure real local sha256
+        cursor.execute(
+            "UPDATE images SET checksum = 'sha256:78c756f1272375e29b03ff62225c9a51e640c55059e745b4a3eca3a1efbdebf0', "
+            "verification_status = 'COMPUTED_LOCALLY' "
+            "WHERE id = 'ubuntu-24-04' AND (verification_status = 'VERIFIED' OR checksum = 'sha256:verified-local')"
+        )
+
+        # 2. Known placeholders to rewrite:
+        # alma-9-official, fedora-40-official, opensuse-15-official, rocky-9-official
+        placeholder_patterns = [
+            "%alma-9-official%",
+            "%fedora-40-official%",
+            "%opensuse-15-official%",
+            "%rocky-9-official%",
+            "%d12bookworm-official%",
+        ]
+        for pat in placeholder_patterns:
+            cursor.execute(
+                "UPDATE images SET checksum = 'no checksum', verification_status = 'UNVERIFIED' "
+                "WHERE checksum LIKE ? AND id != 'debian-12'",
+                (pat,)
+            )
+
+        # For debian-12: replace d12bookworm-official with real computed local checksum
+        cursor.execute(
+            "UPDATE images SET checksum = 'sha256:97df81890768b28518dd236b937f5b59342d6212b48179d8a8b9230c27c6eb27', "
+            "verification_status = 'COMPUTED_LOCALLY', status = 'AVAILABLE' "
+            "WHERE id = 'debian-12' AND (checksum LIKE '%d12bookworm%' OR verification_status = 'OFFICIAL' OR verification_status = 'LOCAL_UNVERIFIED_UPSTREAM')"
+        )
+
+        # Ensure unverified NOT_DOWNLOADED images carry 'no checksum' and verification_status 'UNVERIFIED'
+        cursor.execute(
+            "UPDATE images SET checksum = 'no checksum', verification_status = 'UNVERIFIED' "
+            "WHERE id IN ('almalinux-9', 'fedora-40', 'opensuse-15-6', 'rocky-9') "
+            "AND (checksum LIKE '%official%' OR verification_status = 'OFFICIAL' OR checksum IS NULL)"
+        )
+
+        # 3. CirrOS: remove unofficial SHA-256 and store official MD5
+        cursor.execute(
+            "UPDATE images SET checksum = 'md5:c8fc807773e5354afe61636071771906', "
+            "verification_status = 'OFFICIAL_MD5' "
+            "WHERE id = 'cirros-0-6-2' AND (checksum LIKE 'sha256:%' OR verification_status = 'OFFICIAL' OR verification_status = 'OFFICIAL_MD5_UNOFFICIAL_SHA256')"
+        )
+
+        # 4. Alpine 3.20: ensure verification_status is OFFICIAL_UPSTREAM
+        cursor.execute(
+            "UPDATE images SET verification_status = 'OFFICIAL_UPSTREAM' "
+            "WHERE id = 'alpine-3-20' AND verification_status = 'OFFICIAL'"
+        )
+
+        # 5. Arch Linux: ensure real raw local checksum
+        cursor.execute(
+            "UPDATE images SET checksum = 'sha256:c7d27449e8fa2732a97fcf5c4e56f35762c230873b00328384c1226b2fa30bc9', "
+            "verification_status = 'COMPUTED_LOCALLY' "
+            "WHERE id = 'arch-linux' AND checksum LIKE 'sha256:08754e%'"
+        )
 
 
 def _rows(cur):
