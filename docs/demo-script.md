@@ -39,25 +39,25 @@
    READY.
    ```
 
-3. **Open Dashboard** [NOT VERIFIED: assets served, views not viewed with human eyes until confirmed by operator]:
+3. **Open Dashboard** [Verified by user on 2026-11-14]:
    - Open browser at `http://127.0.0.1:8000/dashboard/`.
    - Enter `PS023_API_TOKEN` (never paste or speak on screen).
    - Point out: Real-time 3D cluster topology, active nodes, hardware resource meters.
 
 ---
 
-## Act 1: Architecture & Resilient Dashboard (2 minutes) [NOT VERIFIED: assets served, views not viewed with human eyes until confirmed by operator]
+## Act 1: Architecture & Resilient Dashboard (2 minutes) [Verified by user on 2026-11-14]
 
 **Talking Points**:
 - PS-023 orchestrates Cloud Hypervisor MicroVMs across heterogeneous compute nodes using direct KVM virtualization.
 - Controller communicates with Worker daemons via authenticated REST APIs with strict timeouts and heartbeat leases.
-- Tour the Dashboard tabs (to be verified live on screen):
-  - **Overview** [Claim NOT VERIFIED live]: Real-time cluster status, active VM counter, schedulable RAM.
+- Tour the Dashboard tabs (verified live by user):
+   - **Overview** [Verified by user]: Real-time cluster status, active VM counter, schedulable RAM.
   - **Nodes**: Live node cards (`node-a` 12 vCPUs / 16GB, `node-b` 4 vCPUs / 4GB), memory headroom, cgroups v2 status.
   - **VMs**: Deployed guests, IP assignments, direct console actions.
   - **Decisions**: Real-time structured placement reasoning log.
   - **Images**: OS catalog featuring Ubuntu 24.04 LTS, Debian 12, Alpine 3.20, and CirrOS with checksums (Debian/Alpine/CirrOS catalog entries marked "not boot-tested").
-  - **Terminal** [Claim NOT VERIFIED live]: In-browser WebSocket terminal into running MicroVMs without exposing guest SSH publicly.
+   - **Terminal** [Verified by user]: In-browser WebSocket terminal into running MicroVMs without exposing guest SSH publicly.
   - **Failover**: Dedicated cluster high-availability monitor.
 
 ---
