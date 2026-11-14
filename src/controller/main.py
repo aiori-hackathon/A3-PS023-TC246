@@ -307,6 +307,23 @@ def decisions(limit: int = 10):
 
 
 # ---------- Scheduler Preview ----------
+@app.get("/scheduler/preview", dependencies=auth)
+def scheduler_preview_get(
+    memory_mb: int = 512,
+    vcpus: int = 1,
+    target_node: str | None = None,
+    policy: str | None = None,
+):
+    return scheduler_preview(
+        SchedulerPreviewRequest(
+            memory_mb=memory_mb,
+            vcpus=vcpus,
+            target_node=target_node,
+            policy=policy,
+        )
+    )
+
+
 @app.post("/scheduler/preview", dependencies=auth)
 def scheduler_preview(req: SchedulerPreviewRequest):
     views = svc.node_views()
