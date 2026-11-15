@@ -1,0 +1,26 @@
+=== [1/4] Baseline Cluster State ===
+Nodes:
+  * Node node-a: status=HEALTHY schedulable_mb=7281 vms_running=0
+  * Node node-b: status=HEALTHY schedulable_mb=6208 vms_running=1
+VMs:
+  * vm-2359f189 (ha-test-worker) [HA]: Node=node-b Status=RUNNING IP=192.168.200.10
+
+=== [2/4] Injecting Failure (Mode: worker) ===
+[2026-11-13 23:28:14] Executing failure injection...
+  Node B worker stopped and all cloud-hypervisor processes killed (VMs gone).
+
+=== [3/4] Detection: Waiting for Node B UNHEALTHY transition ===
+[2026-11-13 23:28:27] Controller marked node-b as UNHEALTHY (detection delay: 12.64s)
+
+=== [4/4] Self-Healing: Monitoring Auto-Evacuation to Node A ===
+
+[2026-11-13 23:28:27] ALL HA VMs Successfully Evacuated to node-a! Total recovery time: 12.68s
+
+Evacuated VM details:
+  * vm-2359f189 (ha-test-worker) -> Node: node-a | Status: RUNNING | IP: 192.168.100.10 | Recovery: 0.36s
+
+Latest Structured Decisions:
+  [vm-2359f189] node-b UNHEALTHY -> evacuating vm-2359f189 (ha) -> placed on node-a (free 7623 MB) -> RUNNING in 0.4 s
+  [vm-2359f189] pinned to target node node-b
+  [vm-c07cdac6] pinned to target node node-a
+=== Self-Healing Verification Complete ===

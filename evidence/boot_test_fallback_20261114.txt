@@ -1,0 +1,50 @@
+======================================================================
+ Cloud Hypervisor Fallback Environment Benchmark
+ Date: 2026-11-14
+ Transport: Local Bridge / Nested Tap
+ Host: AMD Ryzen 7 7445HS w/ Radeon 740M Graphics (12 vCPUs)
+ Node A: Local Host (Fedora Linux, KVM direct)
+ Node B: Local Nested VM (192.168.100.17, nested KVM, 4 vCPUs, 4GB RAM)
+======================================================================
+
+=== Fallback Benchmark: Pinned to node-a (5 Runs, transport: local-bridge) ===
+-------------------------------------------------------------------------------------------------
+Run | VM ID       | Node   | IP             | Status RUNNING | SSH Ready (Full Boot) | Transport
+----+-------------+--------+----------------+----------------+-----------------------+------------
+  1 | vm-da250f84 | node-a | 192.168.100.10 | 0.867 s        | 7.939 s               | local-bridge
+  2 | vm-624193f3 | node-a | 192.168.100.10 | 0.870 s        | 8.372 s               | local-bridge
+  3 | vm-d8d55aff | node-a | 192.168.100.10 | 0.786 s        | 16.170 s              | local-bridge
+  4 | vm-13cfebf7 | node-a | 192.168.100.10 | 0.782 s        | 16.215 s              | local-bridge
+  5 | vm-926304b4 | node-a | 192.168.100.10 | 0.772 s        | 16.398 s              | local-bridge
+-------------------------------------------------------------------------------------------------
+Metric 1: Controller API Create -> Status RUNNING (node-a, 5 runs)
+  Min    : 0.772 s
+  Median : 0.786 s
+  Max    : 0.870 s
+
+Metric 2: Real Full Guest Boot (Create -> SSH Ready, node-a, 5 runs)
+  Min    : 7.939 s
+  Median : 16.170 s
+  Max    : 16.398 s
+=================================================================================================
+
+=== Fallback Benchmark: Pinned to node-b (5 Runs, transport: nested-bridge) ===
+-------------------------------------------------------------------------------------------------
+Run | VM ID       | Node   | IP             | Status RUNNING | SSH Ready (Full Boot) | Transport
+----+-------------+--------+----------------+----------------+-----------------------+------------
+  1 | vm-aaeba0f4 | node-b | 10.77.0.10     | 3.994 s        | 19.027 s              | nested-bridge
+  2 | vm-ff51f61b | node-b | 10.77.0.10     | 3.222 s        | 11.775 s              | nested-bridge
+  3 | vm-e8316b17 | node-b | 10.77.0.10     | 3.472 s        | 13.130 s              | nested-bridge
+  4 | vm-68dea8fe | node-b | 10.77.0.10     | 3.497 s        | 12.736 s              | nested-bridge
+  5 | vm-90e01fa4 | node-b | 10.77.0.10     | 3.874 s        | 13.413 s              | nested-bridge
+-------------------------------------------------------------------------------------------------
+Metric 1: Controller API Create -> Status RUNNING (node-b, 5 runs)
+  Min    : 3.222 s
+  Median : 3.497 s
+  Max    : 3.994 s
+
+Metric 2: Real Full Guest Boot (Create -> SSH Ready, node-b, 5 runs)
+  Min    : 11.775 s
+  Median : 13.130 s
+  Max    : 19.027 s
+=================================================================================================

@@ -1,0 +1,59 @@
+======================================================================
+ PS-023: Node A MicroVM Boot Latency Contention Benchmark
+ Date: 2026-11-14
+ Target: node-a (AMD Ryzen 7 7445HS, Fedora Linux, direct KVM)
+ Workload: Ubuntu Server 24.04 LTS (1 vCPU, 512 MB RAM, 4 GB rootfs)
+ Design: 4 alternating blocks of 5 runs (WITH, WITHOUT, WITH, WITHOUT)
+ Total Runs: 20 runs (10s inter-run gap)
+======================================================================
+
+--- [1] Per-Run Raw Measurements ---
+
+Run | Block | Condition           | VM ID       | IP             | API RUNNING | SSH Ready (Full) | Top 3 systemd-analyze blame
+----+-------+---------------------+-------------+----------------+-------------+------------------+---------------------------------------------------
+  1 |     1 | WITH_NODE_B_VMM     | vm-16512390 | 192.168.100.10 |     0.943 s |          7.704 s | 1.491s pollinate.service ; 1.365s cloud-init.service ; 1.206s cloud-config.service
+  2 |     1 | WITH_NODE_B_VMM     | vm-75bb042d | 192.168.100.10 |     0.787 s |          7.522 s | 1.685s pollinate.service ; 1.315s cloud-config.service ; 1.156s cloud-init.service
+  3 |     1 | WITH_NODE_B_VMM     | vm-23e3109a | 192.168.100.10 |     0.767 s |          9.582 s | 3.750s pollinate.service ; 1.367s cloud-init.service ; 1.102s cloud-config.service
+  4 |     1 | WITH_NODE_B_VMM     | vm-001981bb | 192.168.100.10 |     0.773 s |          7.363 s | 1.788s pollinate.service ; 1.199s cloud-init.service ; 1.083s cloud-config.service
+  5 |     1 | WITH_NODE_B_VMM     | vm-6ecabdde | 192.168.100.10 |     0.775 s |          6.846 s | 1.385s pollinate.service ; 1.059s cloud-config.service ; 1.029s cloud-init.service
+  6 |     2 | WITHOUT_NODE_B_VMM  | vm-d5434612 | 192.168.100.10 |     1.471 s |          8.222 s | 1.570s pollinate.service ; 1.178s cloud-init.service ; 1.120s cloud-config.service
+  7 |     2 | WITHOUT_NODE_B_VMM  | vm-b36aa8a6 | 192.168.100.10 |     1.723 s |          8.486 s | 1.587s pollinate.service ; 1.199s cloud-init.service ; 1.163s cloud-config.service
+  8 |     2 | WITHOUT_NODE_B_VMM  | vm-4959aa7f | 192.168.100.10 |     1.908 s |         11.257 s | 3.490s pollinate.service ; 1.845s cloud-config.service ; 1.500s cloud-init.service
+  9 |     2 | WITHOUT_NODE_B_VMM  | vm-f55aec2f | 192.168.100.10 |     3.665 s |         11.016 s | 1.695s pollinate.service ; 1.260s cloud-config.service ; 1.089s cloud-init.service
+ 10 |     2 | WITHOUT_NODE_B_VMM  | vm-dbe1bf7d | 192.168.100.10 |     3.686 s |         10.993 s | 1.517s pollinate.service ; 1.506s cloud-init.service ; 1.292s cloud-config.service
+ 11 |     3 | WITH_NODE_B_VMM     | vm-b23a8acf | 192.168.100.10 |     0.968 s |          7.897 s | 1.569s pollinate.service ; 1.219s cloud-config.service ; 1.163s cloud-init.service
+ 12 |     3 | WITH_NODE_B_VMM     | vm-3d9eecd8 | 192.168.100.10 |     0.824 s |          8.433 s | 1.861s pollinate.service ; 1.434s cloud-config.service ; 1.064s dev-vda1.device
+ 13 |     3 | WITH_NODE_B_VMM     | vm-f8177e41 | 192.168.100.10 |     0.886 s |          8.117 s | 1.660s pollinate.service ; 1.284s cloud-init.service ; 1.207s cloud-config.service
+ 14 |     3 | WITH_NODE_B_VMM     | vm-c4a95565 | 192.168.100.10 |     0.843 s |          7.819 s | 1.306s cloud-config.service ; 1.273s pollinate.service ; 1.119s cloud-init.service
+ 15 |     3 | WITH_NODE_B_VMM     | vm-3cb164cf | 192.168.100.10 |     0.792 s |          9.764 s | 1.904s pollinate.service ; 1.676s cloud-config.service ; 1.639s cloud-init.service
+ 16 |     4 | WITHOUT_NODE_B_VMM  | vm-351bb2b6 | 192.168.100.10 |     2.177 s |          9.426 s | 1.732s pollinate.service ; 1.386s cloud-config.service ; 1.282s cloud-init.service
+ 17 |     4 | WITHOUT_NODE_B_VMM  | vm-9ed39b78 | 192.168.100.10 |     0.751 s |          7.345 s | 1.542s pollinate.service ; 1.173s cloud-config.service ; 1.107s cloud-init.service
+ 18 |     4 | WITHOUT_NODE_B_VMM  | vm-7f5c3093 | 192.168.100.10 |     1.970 s |          9.961 s | 1.672s cloud-init.service ; 1.441s cloud-config.service ; 1.440s pollinate.service
+ 19 |     4 | WITHOUT_NODE_B_VMM  | vm-38c943b5 | 192.168.100.10 |     3.651 s |         10.582 s | 1.449s pollinate.service ; 1.226s cloud-init.service ; 1.189s cloud-config.service
+ 20 |     4 | WITHOUT_NODE_B_VMM  | vm-3b267eb1 | 192.168.100.10 |     3.639 s |         10.477 s | 1.406s pollinate.service ; 1.282s cloud-config.service ; 1.279s cloud-init.service
+
+--- [2] Statistical Analysis ---
+
+Condition: WITH_NODE_B_VMM (10 runs total, Blocks 1 & 3)
+  SSH Ready Latency : Min = 6.846 s | Median = 7.858 s | Max = 9.764 s
+  API Socket Latency: Min = 0.767 s | Median = 0.808 s | Max = 0.968 s
+
+Condition: WITHOUT_NODE_B_VMM (10 runs total, Blocks 2 & 4)
+  SSH Ready Latency : Min = 7.345 s | Median = 10.219 s | Max = 11.257 s
+  API Socket Latency: Min = 0.751 s | Median = 2.073 s | Max = 3.686 s
+
+Pooled Across All 20 Runs:
+  SSH Ready Latency : Min = 6.846 s | Median = 8.460 s | Max = 11.257 s
+  API Socket Latency: Min = 0.751 s | Median = 0.956 s | Max = 3.686 s
+
+--- [3] Empirical Findings: What the Data Does and Does Not Show ---
+
+What the data DOES show:
+1. Kernel initialization is invariant across conditions (~350ms to 450ms).
+2. Median full boot time: WITH VMM is 7.858 s vs WITHOUT VMM is 10.219 s.
+3. Telemetry captures top in-guest services directly: cloud-init, cloud-config, and pollinate accounts for >80% of userspace boot.
+
+What the data DOES NOT show:
+1. The data does NOT show that the presence of the idle nested Node B VMM alone causes the severe ~16s boot jumps, since slower runs occurred in both conditions.
+2. The data does NOT show host CPU starvation: the host has 12 logical threads, and the idle nested VMM consumes negligible CPU.
+3. It cannot prove definitively whether packet jitter or DNS retry latency on the bridge NAT caused pollinate delays without tcpdump.

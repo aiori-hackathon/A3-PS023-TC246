@@ -16,6 +16,7 @@ export interface Node {
   network_tx_kbps?: number;
   vms_running: number;
   last_heartbeat: number | null;
+  cgroups_enabled?: boolean;
 }
 
 export interface NodeMetricSample {
@@ -66,13 +67,26 @@ export interface VM {
   name: string;
   node_id: string;
   worker_vm_id?: string;
-  status: "RUNNING" | "STOPPED" | "PENDING" | "UNKNOWN" | "FAILED" | string;
+  status: "RUNNING" | "STOPPED" | "PENDING" | "UNKNOWN" | "FAILED" | "EVACUATING" | "EVACUATION_FAILED" | string;
   vcpus: number;
   memory_mb: number;
   disk_gb: number;
   ip_address?: string | null;
   created_at: number;
   image?: string;
+  ha?: boolean;
+  evacuation_error?: string | null;
+  evacuation_retries?: number;
+  recovery_time_s?: number | null;
+  cgroups?: boolean;
+  cgroup_limits?: {
+    memory_max_bytes?: number;
+    memory_overhead_mb?: number;
+    cpu_quota?: number;
+    cpu_period?: number;
+    cpu_headroom?: number;
+    pids_max?: number;
+  } | null;
 }
 
 export interface Candidate {
@@ -89,6 +103,7 @@ export interface Decision {
   requested_mb: number;
   selected: string | null;
   reason: string;
+  policy?: string;
   candidates: Candidate[];
 }
 
@@ -175,10 +190,32 @@ export function clearToken(): void {
   }
 }
 
+export async function initAuth(): Promise<string> {
+  if (currentToken) return currentToken;
+  try {
+    const res = await fetch("/api/auth/token");
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.token) {
+        setToken(data.token);
+        return data.token;
+      }
+    }
+  } catch {
+    // Ignore in production
+  }
+  return currentToken;
+}
+
 export async function api<T>(method: string, path: string, body?: any): Promise<T> {
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${currentToken}`,
-  };
+  if (!currentToken) {
+    await initAuth();
+  }
+
+  const headers: Record<string, string> = {};
+  if (currentToken) {
+    headers["Authorization"] = `Bearer ${currentToken}`;
+  }
   if (body !== undefined) {
     headers["Content-Type"] = "application/json";
   }
@@ -198,6 +235,13 @@ export async function api<T>(method: string, path: string, body?: any): Promise<
     data = await res.json();
   } catch {
     data = {};
+  }
+
+  if (res.status === 401) {
+    clearToken();
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("vmc:auth-unauthorized"));
+    }
   }
 
   if (!res.ok) {

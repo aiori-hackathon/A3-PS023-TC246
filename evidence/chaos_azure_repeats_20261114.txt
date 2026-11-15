@@ -1,0 +1,410 @@
+# Note: public IPs redacted; no other edits
+================================================================================
+PS-023: Azure Chaos Repeats Benchmark (6 Runs: 3 worker + 3 worker-preserve-vms)
+Date: 2026-11-14 22:14:18 IST
+Target Host: Azure Node B (<NODE_B_PUBLIC_IP>) via SSH tunnel / sshuttle
+================================================================================
+
+--------------------------------------------------------------------------------
+RUN 1/6: Mode 'worker' (Repeat #1)
+Timestamp: 2026-11-14 22:14:18 IST
+--------------------------------------------------------------------------------
+  * Node node-a: status=HEALTHY schedulable_mb=4990
+  * Node node-b: status=HEALTHY schedulable_mb=6321
+
+[Deploying HA VM 'ha-azure-worker-r1' to node-b...]
+  Created VM ID: vm-78ef9cb1 (node: node-b, IP: 192.168.200.10)
+  VM vm-78ef9cb1 confirmed RUNNING on node-b (IP: 192.168.200.10)
+
+[Executing chaos failure injection: worker...]
+=== [1/4] Baseline Cluster State ===
+Nodes:
+  * Node node-a: status=HEALTHY schedulable_mb=4983 vms_running=0
+  * Node node-b: status=HEALTHY schedulable_mb=6321 vms_running=0
+VMs:
+  * vm-78ef9cb1 (ha-azure-worker-r1) [HA]: Node=node-b Status=RUNNING IP=192.168.200.10
+
+=== [2/4] Injecting Failure (Mode: worker) ===
+[2026-11-14 22:14:19] Executing failure injection...
+  Node B worker stopped and all cloud-hypervisor processes killed (VMs gone).
+
+=== [3/4] Detection: Waiting for Node B UNHEALTHY transition ===
+[2026-11-14 22:14:35] Controller marked node-b as UNHEALTHY (detection delay: 15.32s)
+
+=== [4/4] Self-Healing: Monitoring Auto-Evacuation to Node A ===
+
+[2026-11-14 22:14:35] ALL HA VMs Successfully Evacuated to node-a! Total recovery time: 15.35s
+
+Evacuated VM details:
+  * vm-78ef9cb1 (ha-azure-worker-r1) -> Node: node-a | Status: RUNNING | IP: 192.168.100.10 | Recovery: 0.36s
+
+Latest Structured Decisions:
+  [vm-78ef9cb1] node-b UNHEALTHY -> evacuating vm-78ef9cb1 (ha) -> placed on node-a (free 4945 MB) -> RUNNING in 0.4 s
+  [vm-78ef9cb1] pinned to target node node-b
+  [vm-7cc4744a] node-b UNHEALTHY -> evacuating vm-7cc4744a (ha) -> placed on node-a (free 4950 MB) -> RUNNING in 0.4 s
+=== Self-Healing Verification Complete ===
+
+
+[Restoring Node B & Verifying Fencing...]
+=== [1/3] Restoring Node B (Mode: worker) ===
+[2026-11-14 22:14:35] Bringing Node B back online...
+  Node B worker service started.
+
+=== [2/3] Waiting for Node B to return to HEALTHY ===
+[2026-11-14 22:14:40] Node B is HEALTHY!
+
+=== [3/3] Fencing Verification: Confirming Stale Copies Cleaned Up ===
+Current VM Placement & States:
+  VM vm-78ef9cb1 (ha-azure-worker-r1) -> Node: node-a | Status: RUNNING [HA]
+
+Node B Worker Active VMs (Should NOT contain stale copies of evacuated VMs):
+  Node B reported running VMs: 0
+=== Fencing & Node B Restoration Verified ===
+
+
+Run 1 (worker #1) Summary:
+  Evacuated VM vm-78ef9cb1 status on node-a: RUNNING
+  Reported cold evacuation time: 0.36s
+
+[Cleaning up evacuated VM vm-78ef9cb1 on node-a...]
+  VM cleaned up. 0 VMs running.
+Waiting 10s gap before next run...
+
+--------------------------------------------------------------------------------
+RUN 2/6: Mode 'worker' (Repeat #2)
+Timestamp: 2026-11-14 22:15:01 IST
+--------------------------------------------------------------------------------
+  * Node node-a: status=HEALTHY schedulable_mb=4937
+  * Node node-b: status=HEALTHY schedulable_mb=6328
+
+[Deploying HA VM 'ha-azure-worker-r2' to node-b...]
+  Created VM ID: vm-e949ac71 (node: node-b, IP: 192.168.200.10)
+  VM vm-e949ac71 confirmed RUNNING on node-b (IP: 192.168.200.10)
+
+[Executing chaos failure injection: worker...]
+=== [1/4] Baseline Cluster State ===
+Nodes:
+  * Node node-a: status=HEALTHY schedulable_mb=4944 vms_running=0
+  * Node node-b: status=HEALTHY schedulable_mb=6328 vms_running=0
+VMs:
+  * vm-e949ac71 (ha-azure-worker-r2) [HA]: Node=node-b Status=RUNNING IP=192.168.200.10
+
+=== [2/4] Injecting Failure (Mode: worker) ===
+[2026-11-14 22:15:02] Executing failure injection...
+  Node B worker stopped and all cloud-hypervisor processes killed (VMs gone).
+
+=== [3/4] Detection: Waiting for Node B UNHEALTHY transition ===
+[2026-11-14 22:15:22] Controller marked node-b as UNHEALTHY (detection delay: 19.99s)
+
+=== [4/4] Self-Healing: Monitoring Auto-Evacuation to Node A ===
+.
+[2026-11-14 22:15:24] ALL HA VMs Successfully Evacuated to node-a! Total recovery time: 21.05s
+
+Evacuated VM details:
+  * vm-e949ac71 (ha-azure-worker-r2) -> Node: node-a | Status: RUNNING | IP: 192.168.100.10 | Recovery: 0.36s
+
+Latest Structured Decisions:
+  [vm-e949ac71] node-b UNHEALTHY -> evacuating vm-e949ac71 (ha) -> placed on node-a (free 4938 MB) -> RUNNING in 0.4 s
+  [vm-e949ac71] pinned to target node node-b
+  [vm-78ef9cb1] node-b UNHEALTHY -> evacuating vm-78ef9cb1 (ha) -> placed on node-a (free 4945 MB) -> RUNNING in 0.4 s
+=== Self-Healing Verification Complete ===
+
+
+[Restoring Node B & Verifying Fencing...]
+=== [1/3] Restoring Node B (Mode: worker) ===
+[2026-11-14 22:15:24] Bringing Node B back online...
+  Node B worker service started.
+
+=== [2/3] Waiting for Node B to return to HEALTHY ===
+[2026-11-14 22:15:29] Node B is HEALTHY!
+
+=== [3/3] Fencing Verification: Confirming Stale Copies Cleaned Up ===
+Current VM Placement & States:
+  VM vm-e949ac71 (ha-azure-worker-r2) -> Node: node-a | Status: RUNNING [HA]
+
+Node B Worker Active VMs (Should NOT contain stale copies of evacuated VMs):
+  Node B reported running VMs: 0
+=== Fencing & Node B Restoration Verified ===
+
+
+Run 2 (worker #2) Summary:
+  Evacuated VM vm-e949ac71 status on node-a: RUNNING
+  Reported cold evacuation time: 0.36s
+
+[Cleaning up evacuated VM vm-e949ac71 on node-a...]
+  VM cleaned up. 0 VMs running.
+Waiting 10s gap before next run...
+
+--------------------------------------------------------------------------------
+RUN 3/6: Mode 'worker' (Repeat #3)
+Timestamp: 2026-11-14 22:15:46 IST
+--------------------------------------------------------------------------------
+  * Node node-a: status=HEALTHY schedulable_mb=4910
+  * Node node-b: status=HEALTHY schedulable_mb=6345
+
+[Deploying HA VM 'ha-azure-worker-r3' to node-b...]
+  Created VM ID: vm-174c5129 (node: node-b, IP: 192.168.200.10)
+  VM vm-174c5129 confirmed RUNNING on node-b (IP: 192.168.200.10)
+
+[Executing chaos failure injection: worker...]
+=== [1/4] Baseline Cluster State ===
+Nodes:
+  * Node node-a: status=HEALTHY schedulable_mb=4916 vms_running=0
+  * Node node-b: status=HEALTHY schedulable_mb=6336 vms_running=0
+VMs:
+  * vm-174c5129 (ha-azure-worker-r3) [HA]: Node=node-b Status=RUNNING IP=192.168.200.10
+
+=== [2/4] Injecting Failure (Mode: worker) ===
+[2026-11-14 22:15:49] Executing failure injection...
+  Node B worker stopped and all cloud-hypervisor processes killed (VMs gone).
+
+=== [3/4] Detection: Waiting for Node B UNHEALTHY transition ===
+[2026-11-14 22:16:06] Controller marked node-b as UNHEALTHY (detection delay: 17.16s)
+
+=== [4/4] Self-Healing: Monitoring Auto-Evacuation to Node A ===
+.
+[2026-11-14 22:16:07] ALL HA VMs Successfully Evacuated to node-a! Total recovery time: 18.22s
+
+Evacuated VM details:
+  * vm-174c5129 (ha-azure-worker-r3) -> Node: node-a | Status: RUNNING | IP: 192.168.100.10 | Recovery: 0.36s
+
+Latest Structured Decisions:
+  [vm-174c5129] node-b UNHEALTHY -> evacuating vm-174c5129 (ha) -> placed on node-a (free 4908 MB) -> RUNNING in 0.4 s
+  [vm-174c5129] pinned to target node node-b
+  [vm-e949ac71] node-b UNHEALTHY -> evacuating vm-e949ac71 (ha) -> placed on node-a (free 4938 MB) -> RUNNING in 0.4 s
+=== Self-Healing Verification Complete ===
+
+
+[Restoring Node B & Verifying Fencing...]
+=== [1/3] Restoring Node B (Mode: worker) ===
+[2026-11-14 22:16:07] Bringing Node B back online...
+  Node B worker service started.
+
+=== [2/3] Waiting for Node B to return to HEALTHY ===
+[2026-11-14 22:16:18] Node B is HEALTHY!
+
+=== [3/3] Fencing Verification: Confirming Stale Copies Cleaned Up ===
+Current VM Placement & States:
+  VM vm-174c5129 (ha-azure-worker-r3) -> Node: node-a | Status: RUNNING [HA]
+
+Node B Worker Active VMs (Should NOT contain stale copies of evacuated VMs):
+  Node B reported running VMs: 0
+=== Fencing & Node B Restoration Verified ===
+
+
+Run 3 (worker #3) Summary:
+  Evacuated VM vm-174c5129 status on node-a: RUNNING
+  Reported cold evacuation time: 0.36s
+
+[Cleaning up evacuated VM vm-174c5129 on node-a...]
+  VM cleaned up. 0 VMs running.
+Waiting 10s gap before next run...
+
+--------------------------------------------------------------------------------
+RUN 4/6: Mode 'worker-preserve-vms' (Repeat #1)
+Timestamp: 2026-11-14 22:16:32 IST
+--------------------------------------------------------------------------------
+  * Node node-a: status=HEALTHY schedulable_mb=4957
+  * Node node-b: status=HEALTHY schedulable_mb=6325
+
+[Deploying HA VM 'ha-azure-worker-r1' to node-b...]
+  Created VM ID: vm-e459c2ae (node: node-b, IP: 192.168.200.10)
+  VM vm-e459c2ae confirmed RUNNING on node-b (IP: 192.168.200.10)
+
+[Executing chaos failure injection: worker-preserve-vms...]
+=== [1/4] Baseline Cluster State ===
+Nodes:
+  * Node node-a: status=HEALTHY schedulable_mb=4937 vms_running=0
+  * Node node-b: status=HEALTHY schedulable_mb=6324 vms_running=0
+VMs:
+  * vm-e459c2ae (ha-azure-worker-r1) [HA]: Node=node-b Status=RUNNING IP=192.168.200.10
+
+=== [2/4] Injecting Failure (Mode: worker-preserve-vms) ===
+[2026-11-14 22:16:34] Executing failure injection...
+  Node B worker stopped. Cloud-hypervisor processes remain running to test recovery fencing.
+
+=== [3/4] Detection: Waiting for Node B UNHEALTHY transition ===
+[2026-11-14 22:16:52] Controller marked node-b as UNHEALTHY (detection delay: 17.44s)
+
+=== [4/4] Self-Healing: Monitoring Auto-Evacuation to Node A ===
+.
+[2026-11-14 22:16:53] ALL HA VMs Successfully Evacuated to node-a! Total recovery time: 18.50s
+
+Evacuated VM details:
+  * vm-e459c2ae (ha-azure-worker-r1) -> Node: node-a | Status: RUNNING | IP: 192.168.100.10 | Recovery: 0.35s
+
+Latest Structured Decisions:
+  [vm-e459c2ae] node-b UNHEALTHY -> evacuating vm-e459c2ae (ha) -> placed on node-a (free 4956 MB) -> RUNNING in 0.3 s
+  [vm-e459c2ae] pinned to target node node-b
+  [vm-174c5129] node-b UNHEALTHY -> evacuating vm-174c5129 (ha) -> placed on node-a (free 4908 MB) -> RUNNING in 0.4 s
+=== Self-Healing Verification Complete ===
+
+
+[Restoring Node B & Verifying Fencing...]
+=== [1/3] Restoring Node B (Mode: worker) ===
+[2026-11-14 22:16:53] Bringing Node B back online...
+  Node B worker service started.
+
+=== [2/3] Waiting for Node B to return to HEALTHY ===
+[2026-11-14 22:16:58] Node B is HEALTHY!
+
+=== [3/3] Fencing Verification: Confirming Stale Copies Cleaned Up ===
+Current VM Placement & States:
+  VM vm-e459c2ae (ha-azure-worker-r1) -> Node: node-a | Status: RUNNING [HA]
+
+Node B Worker Active VMs (Should NOT contain stale copies of evacuated VMs):
+  Node B reported running VMs: 0
+=== Fencing & Node B Restoration Verified ===
+
+
+Run 4 (worker-preserve-vms #1) Summary:
+  Evacuated VM vm-e459c2ae status on node-a: RUNNING
+  Reported cold evacuation time: 0.35s
+
+[Cleaning up evacuated VM vm-e459c2ae on node-a...]
+  VM cleaned up. 0 VMs running.
+Waiting 10s gap before next run...
+
+--------------------------------------------------------------------------------
+RUN 5/6: Mode 'worker-preserve-vms' (Repeat #2)
+Timestamp: 2026-11-14 22:17:16 IST
+--------------------------------------------------------------------------------
+  * Node node-a: status=HEALTHY schedulable_mb=4958
+  * Node node-b: status=HEALTHY schedulable_mb=6316
+
+[Deploying HA VM 'ha-azure-worker-r2' to node-b...]
+  Created VM ID: vm-c6594d5a (node: node-b, IP: 192.168.200.10)
+  VM vm-c6594d5a confirmed RUNNING on node-b (IP: 192.168.200.10)
+
+[Executing chaos failure injection: worker-preserve-vms...]
+=== [1/4] Baseline Cluster State ===
+Nodes:
+  * Node node-a: status=HEALTHY schedulable_mb=4944 vms_running=0
+  * Node node-b: status=HEALTHY schedulable_mb=6316 vms_running=0
+VMs:
+  * vm-c6594d5a (ha-azure-worker-r2) [HA]: Node=node-b Status=RUNNING IP=192.168.200.10
+
+=== [2/4] Injecting Failure (Mode: worker-preserve-vms) ===
+[2026-11-14 22:17:18] Executing failure injection...
+  Node B worker stopped. Cloud-hypervisor processes remain running to test recovery fencing.
+
+=== [3/4] Detection: Waiting for Node B UNHEALTHY transition ===
+[2026-11-14 22:17:36] Controller marked node-b as UNHEALTHY (detection delay: 18.60s)
+
+=== [4/4] Self-Healing: Monitoring Auto-Evacuation to Node A ===
+
+[2026-11-14 22:17:36] ALL HA VMs Successfully Evacuated to node-a! Total recovery time: 18.63s
+
+Evacuated VM details:
+  * vm-c6594d5a (ha-azure-worker-r2) -> Node: node-a | Status: RUNNING | IP: 192.168.100.10 | Recovery: 0.36s
+
+Latest Structured Decisions:
+  [vm-c6594d5a] node-b UNHEALTHY -> evacuating vm-c6594d5a (ha) -> placed on node-a (free 4934 MB) -> RUNNING in 0.4 s
+  [vm-c6594d5a] pinned to target node node-b
+  [vm-e459c2ae] node-b UNHEALTHY -> evacuating vm-e459c2ae (ha) -> placed on node-a (free 4956 MB) -> RUNNING in 0.3 s
+=== Self-Healing Verification Complete ===
+
+
+[Restoring Node B & Verifying Fencing...]
+=== [1/3] Restoring Node B (Mode: worker) ===
+[2026-11-14 22:17:36] Bringing Node B back online...
+  Node B worker service started.
+
+=== [2/3] Waiting for Node B to return to HEALTHY ===
+[2026-11-14 22:17:42] Node B is HEALTHY!
+
+=== [3/3] Fencing Verification: Confirming Stale Copies Cleaned Up ===
+Current VM Placement & States:
+  VM vm-c6594d5a (ha-azure-worker-r2) -> Node: node-a | Status: RUNNING [HA]
+
+Node B Worker Active VMs (Should NOT contain stale copies of evacuated VMs):
+  Node B reported running VMs: 1
+=== Fencing & Node B Restoration Verified ===
+
+
+Run 5 (worker-preserve-vms #2) Summary:
+  Evacuated VM vm-c6594d5a status on node-a: RUNNING
+  Reported cold evacuation time: 0.36s
+
+[Cleaning up evacuated VM vm-c6594d5a on node-a...]
+  VM cleaned up. 0 VMs running.
+Waiting 10s gap before next run...
+
+--------------------------------------------------------------------------------
+RUN 6/6: Mode 'worker-preserve-vms' (Repeat #3)
+Timestamp: 2026-11-14 22:18:00 IST
+--------------------------------------------------------------------------------
+  * Node node-a: status=HEALTHY schedulable_mb=4922
+  * Node node-b: status=HEALTHY schedulable_mb=6320
+
+[Deploying HA VM 'ha-azure-worker-r3' to node-b...]
+  Created VM ID: vm-35ce0a03 (node: node-b, IP: 192.168.200.10)
+  VM vm-35ce0a03 confirmed RUNNING on node-b (IP: 192.168.200.10)
+
+[Executing chaos failure injection: worker-preserve-vms...]
+=== [1/4] Baseline Cluster State ===
+Nodes:
+  * Node node-a: status=HEALTHY schedulable_mb=4923 vms_running=0
+  * Node node-b: status=HEALTHY schedulable_mb=6320 vms_running=0
+VMs:
+  * vm-35ce0a03 (ha-azure-worker-r3) [HA]: Node=node-b Status=RUNNING IP=192.168.200.10
+
+=== [2/4] Injecting Failure (Mode: worker-preserve-vms) ===
+[2026-11-14 22:18:02] Executing failure injection...
+  Node B worker stopped. Cloud-hypervisor processes remain running to test recovery fencing.
+
+=== [3/4] Detection: Waiting for Node B UNHEALTHY transition ===
+[2026-11-14 22:18:18] Controller marked node-b as UNHEALTHY (detection delay: 15.92s)
+
+=== [4/4] Self-Healing: Monitoring Auto-Evacuation to Node A ===
+
+[2026-11-14 22:18:18] ALL HA VMs Successfully Evacuated to node-a! Total recovery time: 15.97s
+
+Evacuated VM details:
+  * vm-35ce0a03 (ha-azure-worker-r3) -> Node: node-a | Status: RUNNING | IP: 192.168.100.10 | Recovery: 0.36s
+
+Latest Structured Decisions:
+  [vm-35ce0a03] node-b UNHEALTHY -> evacuating vm-35ce0a03 (ha) -> placed on node-a (free 4989 MB) -> RUNNING in 0.4 s
+  [vm-35ce0a03] pinned to target node node-b
+  [vm-c6594d5a] node-b UNHEALTHY -> evacuating vm-c6594d5a (ha) -> placed on node-a (free 4934 MB) -> RUNNING in 0.4 s
+=== Self-Healing Verification Complete ===
+
+
+[Restoring Node B & Verifying Fencing...]
+=== [1/3] Restoring Node B (Mode: worker) ===
+[2026-11-14 22:18:18] Bringing Node B back online...
+  Node B worker service started.
+
+=== [2/3] Waiting for Node B to return to HEALTHY ===
+[2026-11-14 22:18:24] Node B is HEALTHY!
+
+=== [3/3] Fencing Verification: Confirming Stale Copies Cleaned Up ===
+Current VM Placement & States:
+  VM vm-35ce0a03 (ha-azure-worker-r3) -> Node: node-a | Status: RUNNING [HA]
+
+Node B Worker Active VMs (Should NOT contain stale copies of evacuated VMs):
+  Node B reported running VMs: 1
+=== Fencing & Node B Restoration Verified ===
+
+
+Run 6 (worker-preserve-vms #3) Summary:
+  Evacuated VM vm-35ce0a03 status on node-a: RUNNING
+  Reported cold evacuation time: 0.36s
+
+[Cleaning up evacuated VM vm-35ce0a03 on node-a...]
+  VM cleaned up. 0 VMs running.
+
+================================================================================
+AZURE CHAOS EXPERIMENT SUMMARY (6 RUNS)
+================================================================================
+Run  | Mode                 | Detect (s)   | Cold Evac (s)  | Total Rec (s)  | Outcome
+--------------------------------------------------------------------------------
+1    | worker               | 15.32        | 0.36           | 15.35          | RUNNING
+2    | worker               | 19.99        | 0.36           | 21.05          | RUNNING
+3    | worker               | 17.16        | 0.36           | 18.22          | RUNNING
+4    | worker-preserve-vms  | 17.44        | 0.35           | 18.50          | RUNNING
+5    | worker-preserve-vms  | 18.60        | 0.36           | 18.63          | RUNNING
+6    | worker-preserve-vms  | 15.92        | 0.36           | 15.97          | RUNNING
+================================================================================
+Mode 'worker' (3 runs) Total Recovery: Min=15.35s, Median=18.22s, Max=21.05s
+Mode 'worker-preserve-vms' (3 runs) Total Recovery: Min=15.97s, Median=18.50s, Max=18.63s

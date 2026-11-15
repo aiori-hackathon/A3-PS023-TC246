@@ -36,22 +36,51 @@ if sudo iptables -S DOCKER-USER >/dev/null 2>&1; then
 fi
 echo "bridge and $(ip -br link show master br-ps023 | wc -l) TAP devices ready"
 
-step "2. node-b (nested VM)"
-bash "$P/outer/start-outer.sh"
-nb() { SSHPASS="$PS023_VM_PASSWORD" sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o ServerAliveInterval=10 rajyavardhan@$NODEB "$@"; }
-for i in $(seq 1 30); do nb true 2>/dev/null && break; sleep 2; done
-nb hostname || { echo "cannot ssh to node-b; see $P/outer/serial.log and vmm.log"; exit 1; }
+step "2. node-b setup"
+if [ "${TUNNEL_MODE:-}" = "ssh" ]; then
+  NODE_B_URL="http://127.0.0.1:8012"
+  echo "SSH tunnel mode active. Connecting to Node B via $NODE_B_URL..."
 
-step "3. node-b inner network and worker"
-nb 'bash -s' < "$P/outer/inner-net.sh" >/dev/null || { echo "inner network setup failed"; exit 1; }
-nb 'bash -s' < "$P/outer/start-worker.sh" >/dev/null 2>&1
-for i in $(seq 1 20); do curl -s -m 2 http://$NODEB:8002/health | grep -q node-b && break; sleep 1; done
-curl -s -m 3 http://$NODEB:8002/health | grep -q node-b || { echo "worker B not answering; run: nb 'tail -n 20 ~/worker.log'"; exit 1; }
-echo "worker B ok"
+  step "3. node-b worker health check"
+  for i in $(seq 1 10); do curl -s -m 2 http://127.0.0.1:8012/health | grep -q node-b && break; sleep 1; done
+  curl -s -m 3 http://127.0.0.1:8012/health | grep -q node-b || { echo "worker B not answering at http://127.0.0.1:8012/health; check ssh tunnel"; exit 1; }
+  echo "worker B (ssh tunnel) ok"
 
-step "4. route to the inner network"
-sudo ip route replace 10.77.0.0/24 via $NODEB
-ip route show 10.77.0.0/24
+  step "4. route to cloud guest network"
+  echo "guest network 192.168.200.0/24 routed via sshuttle"
+elif [ "${AZURE_HYBRID:-0}" = "1" ] || [ "${AWS_HYBRID:-0}" = "1" ]; then
+  NODEB=10.100.0.2
+  NODE_B_URL="http://$NODEB:8002"
+  echo "Cloud hybrid mode active. Connecting to Node B at $NODEB:8002 via WireGuard..."
+  ip link show wg0 >/dev/null 2>&1 || { echo "ERROR: wg0 interface is not active. Run: sudo wg-quick up wg0"; exit 1; }
+  for i in $(seq 1 10); do ping -c 1 -W 2 "$NODEB" >/dev/null 2>&1 && break; sleep 1; done
+  ping -c 1 -W 2 "$NODEB" >/dev/null 2>&1 || { echo "ERROR: Cannot ping Node B at $NODEB over WireGuard."; exit 1; }
+
+  step "3. node-b worker health check"
+  for i in $(seq 1 10); do curl -s -m 2 http://$NODEB:8002/health | grep -q node-b && break; sleep 1; done
+  curl -s -m 3 http://$NODEB:8002/health | grep -q node-b || { echo "worker B not answering at http://$NODEB:8002/health"; exit 1; }
+  echo "worker B (cloud) ok"
+
+  step "4. route to cloud guest network"
+  sudo ip route replace 192.168.200.0/24 dev wg0 2>/dev/null || true
+else
+  NODE_B_URL="http://$NODEB:8002"
+  bash "$P/outer/start-outer.sh"
+  nb() { SSHPASS="$PS023_VM_PASSWORD" sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o ServerAliveInterval=10 rajyavardhan@$NODEB "$@"; }
+  for i in $(seq 1 30); do nb true 2>/dev/null && break; sleep 2; done
+  nb hostname || { echo "cannot ssh to node-b; see $P/outer/serial.log and vmm.log"; exit 1; }
+
+  step "3. node-b inner network and worker"
+  nb 'bash -s' < "$P/outer/inner-net.sh" >/dev/null || { echo "inner network setup failed"; exit 1; }
+  nb 'bash -s' < "$P/outer/start-worker.sh" >/dev/null 2>&1
+  for i in $(seq 1 20); do curl -s -m 2 http://$NODEB:8002/health | grep -q node-b && break; sleep 1; done
+  curl -s -m 3 http://$NODEB:8002/health | grep -q node-b || { echo "worker B not answering; run: nb 'tail -n 20 ~/worker.log'"; exit 1; }
+  echo "worker B ok"
+
+  step "4. route to the inner network"
+  sudo ip route replace 10.77.0.0/24 via $NODEB
+  ip route show 10.77.0.0/24
+fi
 
 step "5. worker A and controller on the host"
 up() { curl -s -m 2 "$1" | grep -q "$2"; }
@@ -65,7 +94,7 @@ sleep 1
 )
 (
   cd "$P/controller" &&
-  export PS023_VM_PASSWORD PS023_API_TOKEN PS023_TOKEN_NODE_A PS023_TOKEN_NODE_B PS023_NODES="node-a=http://127.0.0.1:8001,node-b=http://$NODEB:8002"
+  export PS023_VM_PASSWORD PS023_API_TOKEN PS023_TOKEN_NODE_A PS023_TOKEN_NODE_B PS023_NODES="node-a=http://127.0.0.1:8001,node-b=$NODE_B_URL"
   setsid "$VENV/uvicorn" main:app --host 127.0.0.1 --port 8000 >> "$LOG/controller.log" 2>&1 < /dev/null &
 )
 for i in $(seq 1 30); do up http://127.0.0.1:8001/health node-a && up http://127.0.0.1:8000/health ok && break; sleep 1; done

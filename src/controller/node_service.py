@@ -46,6 +46,7 @@ def poll_node(node, now=None, path=None):
         cpu_total=res["cpu_total"],
         vms_running=res["vms_running"],
         last_heartbeat=now,
+        cgroups_enabled=1 if res.get("cgroups_enabled") else 0,
     )
     return "HEALTHY"
 

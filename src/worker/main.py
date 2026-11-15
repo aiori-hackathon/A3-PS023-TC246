@@ -43,7 +43,7 @@ def health():
 
 @app.get("/resources", dependencies=auth)
 def resources():
-    return get_resources(NODE_ID, manager.list())
+    return get_resources(NODE_ID, manager.list(), cgroups_enabled=manager._cgroups.enabled)
 
 
 @app.get("/vms", dependencies=auth)

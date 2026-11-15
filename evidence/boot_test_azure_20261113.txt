@@ -1,0 +1,36 @@
+=== [1/5] Checking Hardware Virtualization Support on Azure ===
+=== [2/5] Preparing Test Kernel & Disk Payload ===
+Found worker kernel and Ubuntu base image (/opt/ps023-worker/images/ubuntu-24-04.raw). Creating lightweight copy for socket test...
+=== [3/5] Measuring Raw VMM Process & API Socket Readiness ===
+=== [4/5] Raw VMM Socket Initialization Latency ===
+======================================================================
+ Cloud Hypervisor v54.0.0 on Azure Standard_D2s_v4 (Nested KVM)
+----------------------------------------------------------------------
+ VMM Initialization Status     : SUCCESS
+ VMM API Socket Readiness Time : 56 ms (0.056 s) [Socket ready, not guest OS boot]
+ Benchmark VMM Process ID      : 2117
+ Host CPU Model                : Intel(R) Xeon(R) Platinum 8272CL CPU @ 2.60GHz
+ Physical Cores Available      : 2 vCPUs
+ Virtualization Type           : Nested KVM (/dev/kvm)
+======================================================================
+
+=== Real MicroVM Boot & SSH Latency Benchmark via Controller (Pinned to node-b, 5 Runs) ===
+-------------------------------------------------------------------------------------------------
+Run | VM ID       | Node   | IP             | Status RUNNING | SSH Ready (Full Boot) | Transport
+----+-------------+--------+----------------+----------------+-----------------------+------------
+  1 | vm-63f04b32 | node-b | 192.168.200.10 | 1.396 s        | 14.473 s              | ssh-tunnel
+  2 | vm-daefb411 | node-b | 192.168.200.10 | 1.666 s        | 14.096 s              | ssh-tunnel
+  3 | vm-62cb92df | node-b | 192.168.200.10 | 1.432 s        | 14.241 s              | ssh-tunnel
+  4 | vm-2be8705a | node-b | 192.168.200.10 | 1.536 s        | 14.471 s              | ssh-tunnel
+  5 | vm-bd4000e6 | node-b | 192.168.200.10 | 1.253 s        | 14.203 s              | ssh-tunnel
+-------------------------------------------------------------------------------------------------
+Metric 1: Controller API Create -> Status RUNNING (5 runs)
+  Min    : 1.253 s
+  Median : 1.432 s
+  Max    : 1.666 s
+
+Metric 2: Real Full Guest Boot (Create -> SSH Ready, 5 runs)
+  Min    : 14.096 s
+  Median : 14.241 s
+  Max    : 14.473 s
+=================================================================================================

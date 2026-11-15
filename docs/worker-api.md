@@ -59,10 +59,26 @@ half-made VM is left behind.
 | `PS023_SUBNET` | `192.168.100` | First three octets of the VM network; the gateway is `.1`. |
 | `PS023_SLOT_START` | `0` | First slot number. |
 | `PS023_SLOT_COUNT` | `8` | Number of slots. |
+| `PS023_CGROUPS` | `on` | Set to `off` to disable cgroup limits entirely. |
+| `PS023_CGROUP_ROOT` | none (auto-derived) | Root cgroup; auto-derived from `/proc/self/cgroup`. |
+| `PS023_CGROUP_MEMORY_OVERHEAD_MB` | `128` | Fixed memory overhead for VMM process (unmeasured default). |
+| `PS023_CGROUP_PIDS_MIN` | `256` | Minimum PID limit for VMM tree (unmeasured default). |
+| `PS023_CGROUP_CPU_HEADROOM` | `1.25` | CPU quota headroom multiplier (unmeasured default). |
 
 Each VM takes one slot, which fixes its TAP device (`tapvmN`) and its IP. When
 all slots are in use, create is refused with `409`. In the development setup
 node A uses slots 0-3 (VM IPs 192.168.100.10-13).
+
+## Cgroups v2 Enforcement
+
+* On start, the worker creates a dedicated child cgroup `ps023-vmm-<vm_id>` with:
+  * `memory.max`: `(memory_mb + PS023_CGROUP_MEMORY_OVERHEAD_MB) * 1024 * 1024` bytes.
+  * `cpu.max`: `quota period` where `quota = vcpus * 100000 * PS023_CGROUP_CPU_HEADROOM`, `period = 100000`.
+  * `pids.max`: `max(PS023_CGROUP_PIDS_MIN, vcpus * 16)`.
+* Limits are strictly verified by reading back values from the filesystem before reporting `cgroups: true`.
+* If cgroup setup or attach fails, the VM starts unrestricted (`cgroups: false`), and empty directories are cleaned up immediately.
+* On stop and delete, the cgroup is removed after the VMM process is reaped (with EBUSY retries and ENOENT tolerance).
+* Existing running VMs default to `cgroups: false` without retrofitting.
 
 ## Process handling
 

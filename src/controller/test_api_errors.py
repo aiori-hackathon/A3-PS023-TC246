@@ -24,7 +24,12 @@ def raising(exc):
 
 
 def test_create_returns_201(monkeypatch):
-    monkeypatch.setattr(main.svc, "create_vm", lambda *a: {"id": VM})
+    def fake_create_vm(name, vcpus, memory_mb, disk_gb=4, path=None,
+                       ha=False, image="ubuntu-24-04", user_data=None,
+                       tags=None, target_node=None):
+        return {"id": VM, "name": name, "target_node": target_node}
+
+    monkeypatch.setattr(main.svc, "create_vm", fake_create_vm)
     r = client.post("/vms", json=BODY, headers=GOOD)
     assert r.status_code == 201 and r.json()["id"] == VM
 

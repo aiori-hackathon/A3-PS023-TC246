@@ -25,6 +25,9 @@ def token_for(node_id):
     return token
 
 
+DEFAULT_STOP_TIMEOUT_S = 45.0
+
+
 class WorkerClient:
     def __init__(self, node_id, url, token=None):
         self.node_id = node_id
@@ -36,6 +39,12 @@ class WorkerClient:
 
     def close(self):
         self._client.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
 
     def _req(self, method, path, json=None, timeout=10.0):
         try:
@@ -70,8 +79,8 @@ class WorkerClient:
     def start_vm(self, worker_vm_id):
         return self._req("POST", f"/vms/{worker_vm_id}/start", timeout=30.0)
 
-    def stop_vm(self, worker_vm_id):
-        return self._req("POST", f"/vms/{worker_vm_id}/stop", timeout=100.0)
+    def stop_vm(self, worker_vm_id, timeout=DEFAULT_STOP_TIMEOUT_S):
+        return self._req("POST", f"/vms/{worker_vm_id}/stop", timeout=timeout)
 
-    def delete_vm(self, worker_vm_id):
-        return self._req("DELETE", f"/vms/{worker_vm_id}", timeout=100.0)
+    def delete_vm(self, worker_vm_id, timeout=30.0):
+        return self._req("DELETE", f"/vms/{worker_vm_id}", timeout=timeout)

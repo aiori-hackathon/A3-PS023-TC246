@@ -1,4 +1,5 @@
 """Compare the controller's database with what the workers really run."""
+import json
 import time
 
 import database as db
@@ -11,7 +12,8 @@ ORPHAN_MIN_AGE_S = 120   # only remove unknown worker VMs older than this
 
 
 def _log(msg):
-    print("reconcile:", msg, flush=True)
+    ts = time.strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{ts}] reconcile: {msg}", flush=True)
 
 
 def _mark_unknown(node, path):
@@ -38,8 +40,13 @@ def _sync_node(node, remote, client, path, now):
             w = remote[wid]
             status = w["status"].upper()
             ip = w.get("ip")
-            if status != v["status"] or ip != v["ip_address"]:
-                db.update_vm(v["id"], path, status=status, ip_address=ip)
+            cg = 1 if w.get("cgroups") else 0
+            cg_lim = json.dumps(w.get("cgroup_limits")) if w.get("cgroup_limits") else None
+            if (status != v["status"] or ip != v["ip_address"] or
+                    bool(cg) != bool(v.get("cgroups")) or
+                    cg_lim != (json.dumps(v.get("cgroup_limits")) if v.get("cgroup_limits") else None)):
+                db.update_vm(v["id"], path, status=status, ip_address=ip,
+                             cgroups=cg, cgroup_limits=cg_lim)
                 _log(f"{v['id']} synced from {node['id']}: {status}")
         elif wid and age > MISSING_GRACE_S and v["status"] != "FAILED":
             db.update_vm(v["id"], path, status="FAILED")

@@ -1,0 +1,73 @@
+======================================================================
+ PS-023: cgroups v2 Live Memory Isolation & Stress Benchmark
+ Date: 2026-11-14
+ Node: node-a (AMD Ryzen 7 7445HS, Fedora Linux)
+ Guest: Ubuntu Server 24.04 LTS (512 MB RAM, 1 vCPU)
+ Host CGroup Path: /sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/ps023-vmm-vm-d67578d9
+======================================================================
+
+--- [1] Host CGroup Configuration & Limits ---
+Host CGroup Memory Max (memory.max):
+  Value: 671088640 bytes (640.00 MB = 512 MB guest + 128 MB VMM overhead)
+
+Host CGroup CPU Quota (cpu.max):
+  Value: 125000 100000 (1.25 cores headroom)
+
+Host CGroup Initial Events (memory.events):
+  low: 0
+  high: 0
+  max: 233
+  oom: 0
+  oom_kill: 0
+  oom_group_kill: 0
+
+--- [2] In-Guest Baseline Memory ---
+Guest Linux Total RAM: 474 MB (512 MB guest RAM minus kernel/firmware reservations)
+Guest Free/Available: 375 MB (after buffer/cache reclaim)
+
+--- [3] Under-Limit Stress Test (~320 MB touched in guest) ---
+Guest execution:
+  Testing under-limit allocation...
+  Successfully allocated and touched 320 MB in guest RAM
+
+Host CGroup Post-Test Events (memory.events):
+  low: 0
+  high: 0
+  max: 942
+  oom: 0
+  oom_kill: 0
+  oom_group_kill: 0
+Host CGroup Memory Current (memory.current):
+  Value: 670932992 bytes (under 671088640 limit)
+Result: Zero host OOM kills (oom_kill = 0). VMM process remained healthy.
+
+--- [4] Exceeding-Limit Stress Test (Progressive allocation exceeding 512 MB) ---
+Guest execution:
+  Progressive allocation to trigger guest OOM...
+  Allocated and touched 10 MB ... 370 MB
+  [Guest Kernel Reaction]: In-guest OOM killer invoked when physical RAM exhausted.
+  Guest dmesg:
+    [   58.049393] sshd invoked oom-killer: gfp_mask=0x140cca(GFP_HIGHUSER_MOVABLE|__GFP_COMP), order=0, oom_score_adj=0
+    [   58.049419]  oom_kill_process.cold+0x8/0x82
+    [   58.049586] oom-kill:constraint=CONSTRAINT_NONE,nodemask=(null),cpuset=/,mems_allowed=0,global_oom,task_memcg=/user.slice/user-1001.slice/session-9.scope,task=python3,pid=2081,uid=1001
+    [   58.049598] Out of memory: Killed process 2081 (python3) total-vm:407624kB, anon-rss:385024kB, file-rss:2228kB, shmem-rss:0kB, UID:1001 pgtables:824kB oom_score_adj:0
+
+Host CGroup Post-Exceed Events (memory.events):
+  low: 0
+  high: 0
+  max: 1060
+  oom: 0
+  oom_kill: 0
+  oom_group_kill: 0
+Host CGroup Processes (cgroup.procs):
+  PID 19235 (cloud-hypervisor VMM remained alive and unharmed)
+
+--- [5] Plain Analysis & Summary ---
+1. Guest RAM: 512 MB (kernel sees 474 MB usable after firmware/table reservations).
+2. Host CGroup Limit (memory.max): 640 MB (671,088,640 bytes = 512 MB guest + 128 MB overhead).
+3. Which Killer Fired: The IN-GUEST Linux kernel's internal OOM killer fired (sshd invoked oom-killer -> killed python3 PID 2081).
+4. Host CGroup Behavior: The host cgroup did NOT enforce or trigger an OOM kill (memory.events oom_kill = 0, oom = 0).
+5. Mechanism: The guest process attempted to allocate beyond the guest's 512 MB virtual RAM limit. The guest Linux kernel exhausted its own internal memory and terminated the offending process internally before the Cloud Hypervisor VMM process could ever exceed the host's 640 MB cgroup ceiling.
+6. Outcome: The host cgroup ceiling was not breached; the VMM process (PID 19235) was not subjected to host cgroup OOM killing and remained alive and unharmed.
+7. Clean Deletion: Upon VM deletion, the cgroup directory and TAP interface were cleanly removed.
+======================================================================

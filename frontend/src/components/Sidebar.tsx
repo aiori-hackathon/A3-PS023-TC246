@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   CircleAlert,
   Compass,
+  ShieldAlert,
 } from "lucide-react";
 
 export type NavTab =
@@ -24,6 +25,7 @@ export type NavTab =
   | "terminals"
   | "decisions"
   | "events"
+  | "failover"
   | "settings";
 
 interface SidebarProps {
@@ -56,6 +58,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: "terminals" as NavTab, label: "Terminals", icon: Terminal, badge: activeTerminalCount > 0 ? `${activeTerminalCount}` : undefined },
     { id: "decisions" as NavTab, label: "Placement Decisions", icon: GitFork },
     { id: "events" as NavTab, label: "Activity & Events", icon: Activity },
+    { id: "failover" as NavTab, label: "Failover & HA", icon: ShieldAlert },
     { id: "settings" as NavTab, label: "Settings", icon: Settings },
   ];
 

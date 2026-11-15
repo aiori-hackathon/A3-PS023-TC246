@@ -1,0 +1,63 @@
+================================================================================
+PS-023: API Placement Cases Verification
+Date: 2026-11-15 13:56:14 IST
+================================================================================
+
+[Cluster Initial State]
+  * Node node-a: status=HEALTHY schedulable_mb=2059
+  * Node node-b: status=HEALTHY schedulable_mb=2549
+
+--------------------------------------------------------------------------------
+TEST CASE 1: Insufficient Capacity (HTTP 409) with Per-Node Refusal Reasons
+--------------------------------------------------------------------------------
+Request: POST /vms {"name": "case1-oversized", "vcpus": 2, "memory_mb": 4096, "image": "ubuntu-24-04"}
+Response Status: 409
+Response Body:
+{
+  "detail": "no healthy node has enough memory",
+  "decision": {
+    "selected": null,
+    "reason": "no healthy node has enough memory",
+    "requested_mb": 4096,
+    "candidates": [
+      {
+        "node_id": "node-a",
+        "healthy": true,
+        "available_mb": 2045,
+        "verdict": "skipped: not enough memory"
+      },
+      {
+        "node_id": "node-b",
+        "healthy": true,
+        "available_mb": 2549,
+        "verdict": "skipped: not enough memory"
+      }
+    ],
+    "policy": "memory_aware"
+  }
+}
+    * node-a: skipped: not enough memory (available: 2045 MB)
+    * node-b: skipped: not enough memory (available: 2549 MB)
+>> PASSED: HTTP 409 returned with detailed per-node refusal reasons.
+
+--------------------------------------------------------------------------------
+TEST CASE 2: Unknown target_node (HTTP 422 Unprocessable Entity)
+--------------------------------------------------------------------------------
+Request: POST /vms {"name": "case2-bad-node", "vcpus": 1, "memory_mb": 512, "image": "ubuntu-24-04", "target_node": "nonexistent-node-xyz"}
+Response Status: 422
+Response Body:
+{
+  "detail": "unknown target_node 'nonexistent-node-xyz'"
+}
+>> PASSED: HTTP 422 returned for invalid target_node.
+
+--------------------------------------------------------------------------------
+TEST CASE 3: Capacity Fall-Through to Other Node
+--------------------------------------------------------------------------------
+Current Schedulable Memory: {'node-a': 2045, 'node-b': 2549}
+Smaller node: node-a (2045 MB), Larger node: node-b (2549 MB)
+Requesting 2301 MB without pinning: min_node (node-a) cannot fit it (2045 MB), should fall through to max_node (node-b)
+Response Status: 201
+Created VM ID: vm-4af938c1 placed on node: node-b
+>> PASSED: Request successfully bypassed node-a (refusal/unfit) and fell through to node-b.
+Cleaning up VM vm-4af938c1...

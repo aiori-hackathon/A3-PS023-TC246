@@ -1,0 +1,23 @@
+PS-023: Timestamped Failover & Reconcile Verification
+Date: 2026-11-15 23:23:46 - 23:24:20 IST
+Environment: Primary Local Fallback (Direct KVM Node A + Nested KVM Node B)
+Test Target: HA VM failover from node-b to node-a (Mode: worker, HA=True)
+
+Measured Latency & Telemetry:
+  - VM ID: vm-2dd41fee
+  - Target Node Initial: node-b (IP: 10.77.0.10)
+  - Failure Injected: 2026-11-15 23:23:53 (ps023-worker stopped, cloud-hypervisor killed)
+  - Node B Detected UNHEALTHY: 2026-11-15 23:24:06 (Detection Delay: 13.18 s)
+  - Auto-Evacuated to Node A: 2026-11-15 23:24:07 (Cold Evacuation: 1.01 s)
+  - Total Recovery Time: 14.19 s (Status: RUNNING on node-a, IP: 192.168.100.10)
+  - Node B Worker Restored: 2026-11-15 23:24:13 (Return Delay: 5.04 s)
+
+Timestamped Controller Reconcile Log Extracts:
+  [2026-11-15 23:24:06] reconcile: vm-2dd41fee -> UNKNOWN (node-b is unhealthy)
+  [2026-11-15 23:24:12] reconcile: fenced stale copy vm-6a868327 (ha-failover-single) on recovered node-b
+
+Comparison with Historical Run 1-3 (worker mode):
+  - Fallback repeats 1-3 total recovery: 14.71 s - 15.30 s (detection: 14.20 - 14.79 s, evac: 0.51 s)
+  - Today's verified total recovery: 14.19 s (detection: 13.18 s, evac: 1.01 s)
+  - Reconcile tombstone fencing executed immediately upon worker availability (at 23:24:12).
+  - Note on historical run 6 (15 Nov 13:52): The split between wait and shutdown in run 6 was not instrumented in that run's logs; today's instrumentation verifies exact timestamps for reconcile state changes and fencing.
