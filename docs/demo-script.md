@@ -46,7 +46,7 @@
 
 ---
 
-## Act 1: Architecture & Resilient Dashboard (2 minutes) [Partial: 7 of 8 views verified by user on 2026-11-15]
+## Act 1: Architecture & Resilient Dashboard (2 minutes) [All 8 views verified by user on 2026-11-15]
 
 **Talking Points**:
 - PS-023 orchestrates Cloud Hypervisor MicroVMs across heterogeneous compute nodes using direct KVM virtualization.
@@ -59,7 +59,7 @@
   - **Events** [Verified by user on 2026-11-15]: Real-time cluster event stream and audit log.
   - **Images** [Verified by user on 2026-11-15]: OS catalog featuring Ubuntu 24.04 LTS, Debian 12, Alpine 3.20, and CirrOS with checksums (Debian/Alpine/CirrOS catalog entries marked "not boot-tested").
   - **Terminal** [Verified by user on 2026-11-15]: In-browser WebSocket terminal into running MicroVMs without exposing guest SSH publicly.
-  - **Failover** [NOT VERIFIED]: Dedicated cluster high-availability monitor.
+  - **Failover** [Verified by user on 2026-11-15]: Dedicated cluster high-availability monitor.
 
 ---
 

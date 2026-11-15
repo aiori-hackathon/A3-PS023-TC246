@@ -1,13 +1,13 @@
 # PS-023: Hackathon Presentation Deck Outline & Jury Defense Guide
 **Standard Format**: AIORI Hackathon Structure (`Proposed-structure-hackathon.pdf`)  
 **Target Environment**: Primary Local Fallback (Direct KVM Node A + Nested KVM Node B) & Azure Hybrid Reference  
-**Deck Generation Status**: `python-pptx` is **not installed** in this environment (`ModuleNotFoundError: No module named 'pptx'`); complete presentation markdown, diagram sources, data tables, and slide contents are fully rendered below for slide authoring.
+**Deck Generation Status**: `python-pptx` is installed in `~/ps023/.venv/` (slide deck generation deferred per user instruction; complete presentation markdown, diagram sources, data tables, and slide contents are fully rendered below for slide authoring).
 
 ---
 
 ## Slide 1: Title Slide
 - **Title**: PS-023: High-Availability Cloud Hypervisor MicroVM Orchestration Platform
-- **Subtitle**: Sub-Second Cold Failover, Cgroups v2 Isolation & Pluggable Policy Scheduling across Heterogeneous Infrastructure
+- **Subtitle**: Sub-Second Cold Evacuation, Cgroups v2 Isolation & Pluggable Policy Scheduling across Heterogeneous Infrastructure
 - **Presenter**: Rajyavardhan
 - **Event**: AIORI Hackathon 3
 - **Date**: November 15, 2026
@@ -27,7 +27,7 @@
 ## Slide 3: Background
 - **Context & Optimization Goals**:
   - Modern edge computing demands lightweight hardware virtualization with minimal overhead (Rust-based Cloud Hypervisor).
-  - High availability requires real-time heartbeat monitoring with sub-second evacuation rather than manual operator intervention.
+  - High availability requires real-time heartbeat monitoring (~14s detection) with sub-second cold evacuation (0.00s–0.70s) rather than manual operator intervention.
   - Control plane reliability necessitates stateful database reconciliation where controller restarts preserve in-flight guests with zero orphan processes.
 
 ---
@@ -54,13 +54,13 @@
 
 | Capability / Metric | Traditional VM Orchestrator | PS-023 Cloud Hypervisor Platform | Evidence Reference |
 | :--- | :--- | :--- | :--- |
-| **VMM Memory Overhead** | 256 MB – 1024 MB | **128 MB fixed overhead** (enforced via cgroups) | `cgroups_memory_stress_20261114.txt` |
-| **Kernel Boot Duration** | 2.5 s – 8.0 s | **327 ms – 474 ms** (Node A direct KVM) | `boot_test_fallback_20261114.txt:L15` |
-| **API Create -> Running** | 5.0 s – 15.0 s | **0.772 s – 0.997 s** | `boot_node_a_bimodality_20261114.txt:L35` |
-| **HA Failure Detection** | 30 s – 120 s (timeout loops) | **13.83 s – 15.70 s** (fallback) / **14.0 s – 14.88 s** (Azure) | `chaos_fallback_repeats_20261115.txt` |
-| **Cold Evacuation Latency** | 10 s – 45 s | **0.00 s – 0.70 s** (sub-second cold failover) | `chaos_fallback_repeats_20261115.txt` |
-| **Total Failover Recovery** | 45 s – 180 s | **14.33 s – 16.39 s** (complete recovery) | `chaos_fallback_repeats_20261115.txt` |
-| **Split-Brain Fencing** | Manual reboot / IPMI STONITH | **Automated worker reconciliation (2.0s – 9.33s)** | `chaos_fallback_repeats_20261115.txt` |
+| **VMM Memory Overhead** | 256 MB – 1024 MB | **128 MB fixed overhead** (enforced via cgroups) | `cgroups_memory_stress_20261114.txt:L10-L12` |
+| **Kernel Boot Duration** | 2.5 s – 8.0 s | **327 ms – 474 ms** (Node A direct KVM) | `boot_node_a_bimodality_20261114.txt:L33-L46, L59` |
+| **API Create -> Running** | 5.0 s – 15.0 s | **0.772 s – 0.997 s** (Node A direct KVM) | `boot_node_a_bimodality_20261114.txt:L13-L27` |
+| **HA Failure Detection** | 30 s – 120 s (timeout loops) | **13.83 s – 15.70 s** (fallback) / **15.32 s – 19.99 s** (Azure historical) | `chaos_fallback_repeats_20261115.txt:L189-L194`<br>`chaos_azure_repeats_20261114.txt:L402-L407` |
+| **Cold Evacuation Latency** | 10 s – 45 s | **0.00 s – 0.70 s** (sub-second cold placement & boot on surviving node) | `chaos_fallback_repeats_20261115.txt:L189-L194`<br>`chaos_azure_repeats_20261114.txt:L402-L407` |
+| **Total Failover Recovery** | 45 s – 180 s | **14.33 s – 16.39 s** (fallback total) / **15.35 s – 21.05 s** (Azure historical total) | `chaos_fallback_repeats_20261115.txt:L189-L194`<br>`chaos_azure_repeats_20261114.txt:L402-L407` |
+| **Split-Brain Fencing** | Manual reboot / IPMI STONITH | **Automated worker reconciliation (2.0s – 9.33s post-return)** | `chaos_fallback_repeats_20261115.txt:L192-L194` |
 
 ---
 
@@ -183,16 +183,17 @@ graph LR
 - **Plain HTTP & Bearer Auth**: No mutual TLS (mTLS); transport security relies on network overlays (WireGuard/SSH).
 - **Single Tested Distribution**: Ubuntu 24.04 LTS is the sole boot-tested OS; Debian, Alpine, and CirrOS remain catalog-only entries.
 - **Local Fallback Shared Hardware**: Nested Node B runs on the same physical CPU/RAM/motherboard as Node A.
-- **Cold Evacuation, Not Live Migration**: Workloads restart from clean disk; in-memory state is not preserved during failover.
+- **Cold Evacuation, Not Live Migration**: Workloads restart from clean disk; in-memory state and active sockets are not preserved during failover.
 - **Boot Time Variance (7.058 s to 16.398 s)**: Invariant kernel boot (~350 ms), but in-guest cloud-init/pollinate network entropy fetch causes bimodal variance.
-- **Block I/O (`io.max`) Not Enforced**: Only CPU quota, memory max, and PID limits are currently verified.
+- **Block I/O (`io.max`) Not Enforced**: Only CPU quota and memory max are verified.
+- **WireGuard Scope**: Verified on a mobile hotspot only; blocked by hostel Wi-Fi UDP 51820 filtering; bandwidth was not measured.
 
 ---
 
 ## Slide 11: Summary & Conclusion
 - **Delivered Capabilities**:
-  - Sub-second MicroVM placement and cold evacuation (**0.00 s – 0.70 s**).
-  - Robust split-brain fencing eliminating duplicate primary execution units.
+  - Sub-second MicroVM cold evacuation placement (**0.00 s – 0.70 s**; total recovery **14.33 s – 16.39 s**).
+  - Robust split-brain fencing eliminating duplicate primary execution units (**2.0 s – 9.33 s**).
   - Zero-orphan controller restart reconciliation in **2.06 s**.
   - Production-grade cgroup v2 resource guarantees preventing host denial of service.
 
@@ -202,9 +203,9 @@ graph LR
 
 | Likely Jury Question | Authoritative Technical Answer | Source Evidence File |
 | :--- | :--- | :--- |
-| **Q1: "How fast is cold boot really, and why does it vary from 7s to 16s?"** | Cloud Hypervisor kernel boot is invariant at **327–474 ms**. The variance between 7s and 16s occurs entirely inside the guest operating system during systemd boot (specifically `pollinate.service` querying `entropy.ubuntu.com` over NAT). | `evidence/boot_test_fallback_20261114.txt:L15`<br>`evidence/boot_node_a_bimodality_20261114.txt:L10-L65` |
-| **Q2: "What happens if a failed node comes back online while its VM was evacuated elsewhere?"** | The split-brain fencing mechanism in `reconcile.py` cross-checks active HA VMs against tombstone records. Upon Node B's return, the controller immediately instructs Node B's worker to terminate any duplicate stale VMM processes (**fenced in 2.0s to 9.33s**). | `evidence/chaos_fallback_repeats_20261115.txt:L230-L245` |
-| **Q3: "If the controller crashes, do running MicroVMs get killed?"** | No. Worker daemons and Cloud Hypervisor processes operate independently of the controller. When the controller restarts (taking **2.06 s**), the reconciliation loop discovers existing running VMs via `/vms` on each worker, re-syncs state with 0 orphans and 0 duplicates. | `evidence/controller_restart_20261115.txt:L1-L60` |
-| **Q4: "How do you prevent a runaway VM from taking down the host?"** | Each MicroVM is placed in a cgroup v2 slice with hard `memory.max` (`VM_RAM + 128MB`), `cpu.max` (vCPU CFS quota with 1.25x headroom), and `pids.max` (256). Stress tests confirm host kernel OOM-kills the offending guest process without affecting other VMs or the host. | `evidence/cgroups_memory_stress_20261114.txt:L30-L100` |
-| **Q5: "How does the scheduler handle edge cases like capacity refusal?"** | If a request exceeds cluster memory, the API returns **HTTP 409** with structured per-node candidate rejection reasons. If pinned to an invalid node, it returns **HTTP 422**. If an unpinned request fits only on a specific node, it automatically falls through. | `evidence/placement_cases_20261115.txt:L1-L90` |
-| **Q6: "Why is local fallback used instead of Azure for today's presentation?"** | Azure hybrid mode was benchmarked on 13–14 Nov over WireGuard and SSH tunnel. However, local venue hostel Wi-Fi enforces strict UDP firewall filters that block WireGuard (UDP 51820). The local fallback architecture provides identical KVM isolation and subnet routing reliably without external network dependencies. | `evidence/wireguard_hotspot_20261114.txt`<br>`evidence/chaos_azure_repeats_20261114.txt` |
+| **Q1: "How fast is cold boot really, and why does it vary from 7s to 16s?"** | Cloud Hypervisor kernel boot is invariant at **327–474 ms**. The variance between 7s and 16s occurs entirely inside the guest operating system during systemd boot (specifically `pollinate.service` querying `entropy.ubuntu.com` over NAT). Median boot to SSH ready on direct KVM is **8.372 s**. | `evidence/boot_node_a_bimodality_20261114.txt:L10-L65` |
+| **Q2: "What happens if a failed node comes back online while its VM was evacuated elsewhere?"** | The split-brain fencing mechanism in `reconcile.py` cross-checks active HA VMs against tombstone records. Upon Node B's return, the controller immediately instructs Node B's worker to terminate any duplicate stale VMM processes (**fenced in 2.0s to 9.33s post-return**). | `evidence/chaos_fallback_repeats_20261115.txt:L187-L194` |
+| **Q3: "If the controller crashes, do running MicroVMs get killed?"** | No. Worker daemons and Cloud Hypervisor processes operate independently of the controller. When the controller restarts (taking **2.06 s**), the reconciliation loop discovers existing running VMs via `/vms` on each worker, re-syncs state with 0 orphans and 0 duplicates. | `evidence/controller_restart_20261115.txt:L20-L32` |
+| **Q4: "How do you prevent a runaway VM from taking down the host?"** | Each MicroVM is placed in a cgroup v2 slice with hard `memory.max` (`VM_RAM + 128MB`), `cpu.max` (vCPU CFS quota with 1.25x headroom), and `pids.max` (256). Stress tests confirm the in-guest kernel OOM-killer terminates the over-allocating process inside the guest before the host cgroup limit (640MB) is breached. The VMM process remains alive and unharmed, and host memory is strictly protected. | `evidence/cgroups_memory_stress_20261114.txt:L10-L12, L40-L71` |
+| **Q5: "How does the scheduler handle edge cases like capacity refusal?"** | If a request exceeds cluster memory, the API returns **HTTP 409** with structured per-node candidate rejection reasons. If pinned to an invalid node, it returns **HTTP 422**. If an unpinned request fits only on a specific node, it automatically falls through. | `evidence/placement_cases_20261115.txt:L11-L62` |
+| **Q6: "Why is local fallback used instead of Azure for today's presentation?"** | Azure hybrid mode was benchmarked on 13–14 Nov over WireGuard and SSH tunnel. However, local venue hostel Wi-Fi enforces strict UDP firewall filters that block WireGuard (UDP 51820). The local fallback architecture provides identical KVM isolation and subnet routing reliably without external network dependencies. | `evidence/wireguard_hotspot_20261114.txt:L9-L15, L75-L80`<br>`evidence/chaos_azure_repeats_20261114.txt:L398-L410` |
