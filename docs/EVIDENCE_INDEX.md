@@ -33,7 +33,7 @@ Source: [chaos_fallback_repeats_20261115.txt](file:///home/rajyavardhan/ps023/ev
 | **Run 6** | `worker-preserve-vms` | 15.70 s | 0.70 s | 16.39 s | KILLED (9.33s post-return) | L194 |
 
 *Note on Run 5 (0.00 s Evacuation)*: The controller background polling loop executed node failure detection and evacuation placement synchronously in the same tick (<0.005 s delta).  
-*Note on Run 6 (9.33 s Fencing)*: Node B returned mid-cycle of the 5s reconcile loop (~4.5s wait); worker stop escalation took ~3.5s; client 1s poll interval verified 0 stale VMMs at 9.33s.
+*Note on Run 6 (9.33 s Fencing)*: Fencing of the stale VMM was verified at 9.33 s post-return; the split between wait and shutdown was not instrumented.
 
 ### B. Azure Hybrid Cloud Environment (Historical Recorded Runs, 13–14 Nov 2026)
 Source: [chaos_azure_repeats_20261114.txt](file:///home/rajyavardhan/ps023/evidence/chaos_azure_repeats_20261114.txt) (Transport: SSH tunnel / sshuttle)

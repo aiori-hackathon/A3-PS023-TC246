@@ -44,7 +44,7 @@ This document explicitly details the known architectural boundaries, environment
   - In-flight memory state, active TCP sockets, and non-persisted ephemeral filesystem changes on the failed node are lost upon evacuation.
 - **Split-Brain Fencing**:
   When a failed node recovers, fencing is performed asynchronously by the controller's reconciliation loop: any stale Cloud Hypervisor processes matching pending tombstones or active HA VMs on other nodes are terminated via worker deletion calls. Fencing latency is typically **2.0 s – 9.33 s** post-return.
-  - **Run 6 (9.33 s Fencing)**: In fallback run 6, fencing took 9.33 s post-return because Node B returned mid-cycle of the 5s polling loop (~4.5s wait), worker stop escalation took ~3.5s, and the client 1s poll interval verified 0 stale VMMs at 9.33s.
+  - **Run 6 (9.33 s Fencing)**: In fallback run 6, fencing took 9.33 s post-return; the split between wait and shutdown was not instrumented.
 
 ---
 
