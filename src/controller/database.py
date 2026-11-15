@@ -50,7 +50,8 @@ CREATE TABLE IF NOT EXISTS decisions (
     requested_mb INTEGER NOT NULL,
     selected TEXT,
     reason TEXT NOT NULL,
-    candidates TEXT NOT NULL
+    candidates TEXT NOT NULL,
+    policy TEXT DEFAULT 'memory_aware'
 );
 CREATE TABLE IF NOT EXISTS stale_vm_tombstones (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -84,7 +85,10 @@ CREATE TABLE IF NOT EXISTS images (
     download_url TEXT,
     created_at REAL NOT NULL,
     kernel_compat TEXT DEFAULT 'COMPATIBLE',
-    notes TEXT
+    notes TEXT,
+    kernel_path TEXT,
+    initrd_path TEXT,
+    cmdline TEXT DEFAULT 'console=ttyS0 root=/dev/vda1'
 );
 CREATE TABLE IF NOT EXISTS node_metrics (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -115,11 +119,11 @@ DEFAULT_IMAGES = [
         "path": str(Path.home() / "ps023" / "lab" / "images" / "ubuntu-noble.raw"),
         "disk_size_bytes": 3758096384,
         "status": "AVAILABLE",
-        "verification_status": "VERIFIED",
-        "checksum": "sha256:verified-local",
+        "verification_status": "COMPUTED_LOCALLY",
+        "checksum": "sha256:78c756f1272375e29b03ff62225c9a51e640c55059e745b4a3eca3a1efbdebf0",
         "download_url": "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img",
         "kernel_compat": "COMPATIBLE",
-        "notes": "Verified official Ubuntu noble raw disk image. Bootable out of the box via direct kernel boot.",
+        "notes": "Ubuntu noble raw disk image. Checksum computed locally, not compared to upstream. Bootable out of the box via direct kernel boot.",
     },
     {
         "id": "debian-12",
@@ -131,11 +135,11 @@ DEFAULT_IMAGES = [
         "path": str(Path.home() / "ps023" / "images" / "debian-12.raw"),
         "disk_size_bytes": 3221225472,
         "status": "AVAILABLE",
-        "verification_status": "VERIFIED",
-        "checksum": "sha256:d12bookworm-official",
+        "verification_status": "COMPUTED_LOCALLY",
+        "checksum": "sha256:97df81890768b28518dd236b937f5b59342d6212b48179d8a8b9230c27c6eb27",
         "download_url": "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.raw",
         "kernel_compat": "COMPATIBLE",
-        "notes": "Official Debian 12 bookworm genericcloud raw image (ext4 rootfs). Compatible with direct kernel boot.",
+        "notes": "Debian 12 genericcloud raw image. Checksum computed locally, not compared to upstream. Status: not boot-tested.",
     },
     {
         "id": "fedora-40",
@@ -147,11 +151,11 @@ DEFAULT_IMAGES = [
         "path": str(Path.home() / "ps023" / "images" / "fedora-40.raw"),
         "disk_size_bytes": None,
         "status": "NOT_DOWNLOADED",
-        "verification_status": "OFFICIAL",
-        "checksum": "sha256:fedora-40-official",
+        "verification_status": "UNVERIFIED",
+        "checksum": "no checksum",
         "download_url": "https://archives.fedoraproject.org/pub/archive/fedora/linux/releases/40/Cloud/x86_64/images/Fedora-Cloud-Base-Generic.x86_64-40-1.14.qcow2",
         "kernel_compat": "REQUIRES_CONVERSION",
-        "notes": "Fedora Cloud Base image. Must be converted from QCOW2 to RAW format.",
+        "notes": "Fedora Cloud Base image (not downloaded, no checksum). Must be converted from QCOW2 to RAW format. Status: not boot-tested.",
     },
     {
         "id": "rocky-9",
@@ -163,11 +167,11 @@ DEFAULT_IMAGES = [
         "path": str(Path.home() / "ps023" / "images" / "rocky-9.raw"),
         "disk_size_bytes": None,
         "status": "NOT_DOWNLOADED",
-        "verification_status": "OFFICIAL",
-        "checksum": "sha256:rocky-9-official",
+        "verification_status": "UNVERIFIED",
+        "checksum": "no checksum",
         "download_url": "https://download.rockylinux.org/pub/rocky/9/images/x86_64/Rocky-9-GenericCloud-Base.latest.x86_64.qcow2",
         "kernel_compat": "REQUIRES_CONVERSION",
-        "notes": "Rocky Linux 9 GenericCloud image. Requires QCOW2 to RAW conversion.",
+        "notes": "Rocky Linux 9 GenericCloud image (not downloaded, no checksum). Requires QCOW2 to RAW conversion. Status: not boot-tested.",
     },
     {
         "id": "almalinux-9",
@@ -179,11 +183,11 @@ DEFAULT_IMAGES = [
         "path": str(Path.home() / "ps023" / "images" / "almalinux-9.raw"),
         "disk_size_bytes": None,
         "status": "NOT_DOWNLOADED",
-        "verification_status": "OFFICIAL",
-        "checksum": "sha256:alma-9-official",
+        "verification_status": "UNVERIFIED",
+        "checksum": "no checksum",
         "download_url": "https://repo.almalinux.org/almalinux/9/cloud/x86_64/images/AlmaLinux-9-GenericCloud-latest.x86_64.qcow2",
         "kernel_compat": "REQUIRES_CONVERSION",
-        "notes": "AlmaLinux 9 GenericCloud image. Requires QCOW2 to RAW conversion.",
+        "notes": "AlmaLinux 9 GenericCloud image (not downloaded, no checksum). Requires QCOW2 to RAW conversion. Status: not boot-tested.",
     },
     {
         "id": "opensuse-15-6",
@@ -195,11 +199,11 @@ DEFAULT_IMAGES = [
         "path": str(Path.home() / "ps023" / "images" / "opensuse-15-6.raw"),
         "disk_size_bytes": None,
         "status": "NOT_DOWNLOADED",
-        "verification_status": "OFFICIAL",
-        "checksum": "sha256:opensuse-15-official",
+        "verification_status": "UNVERIFIED",
+        "checksum": "no checksum",
         "download_url": "https://download.opensuse.org/distribution/leap/15.6/appliances/openSUSE-Leap-15.6-Minimal-VM.x86_64-Cloud.qcow2",
         "kernel_compat": "REQUIRES_CONVERSION",
-        "notes": "openSUSE Leap 15.6 Cloud appliance. Requires QCOW2 to RAW conversion.",
+        "notes": "openSUSE Leap 15.6 Cloud appliance (not downloaded, no checksum). Requires QCOW2 to RAW conversion. Status: not boot-tested.",
     },
     {
         "id": "arch-linux",
@@ -211,11 +215,49 @@ DEFAULT_IMAGES = [
         "path": str(Path.home() / "ps023" / "images" / "arch-linux.raw"),
         "disk_size_bytes": 2147483648,
         "status": "INCOMPATIBLE_KERNEL",
-        "verification_status": "VERIFIED_INCOMPATIBLE",
-        "checksum": "sha256:08754e28d91b1680086c6211ef4df13559e766fff7cdb4006489b14b5d281f08",
+        "verification_status": "COMPUTED_LOCALLY",
+        "checksum": "sha256:c7d27449e8fa2732a97fcf5c4e56f35762c230873b00328384c1226b2fa30bc9",
         "download_url": "https://geo.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2",
         "kernel_compat": "INCOMPATIBLE_BTRFS",
-        "notes": "Official Arch Linux cloudimg uses Btrfs filesystem. Current direct-boot kernel (vmlinux.bin) has only ext4 support (CONFIG_BTRFS_FS disabled). An ext4-based raw disk image or Btrfs-compiled kernel is required.",
+        "notes": "Arch Linux raw disk image. Checksum computed locally, not compared to upstream. Status: not boot-tested. Direct-boot kernel requires ext4 (btrfs incompatible).",
+    },
+    {
+        "id": "alpine-3-20",
+        "name": "Alpine Linux 3.20 (virt)",
+        "distro": "Alpine",
+        "version": "3.20.3",
+        "arch": "x86_64",
+        "format": "raw",
+        "path": str(Path.home() / "ps023" / "images" / "alpine-3-20.raw"),
+        "disk_size_bytes": 134217728,
+        "status": "NOT_DOWNLOADED",
+        "verification_status": "OFFICIAL_UPSTREAM",
+        "checksum": "sha256:81df854fbd7327d293c726b1eeeb82061d3bc8f5a86a6f77eea720f6be372261",
+        "download_url": "https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/x86_64/alpine-virt-3.20.3-x86_64.iso",
+        "kernel_compat": "COMPATIBLE",
+        "kernel_path": "/boot/vmlinuz-virt",
+        "initrd_path": "/boot/initramfs-virt",
+        "cmdline": "console=ttyS0 root=/dev/vda1 modules=ext4,virtio_pci,virtio_net",
+        "notes": "Official Alpine Linux 3.20 virt image (not downloaded). Upstream official release SHA-256 from https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/x86_64/alpine-virt-3.20.3-x86_64.iso.sha256. Status: not boot-tested.",
+    },
+    {
+        "id": "cirros-0-6-2",
+        "name": "CirrOS 0.6.2",
+        "distro": "CirrOS",
+        "version": "0.6.2",
+        "arch": "x86_64",
+        "format": "raw",
+        "path": str(Path.home() / "ps023" / "images" / "cirros-0.6.2-x86_64-disk.img"),
+        "disk_size_bytes": 16777216,
+        "status": "NOT_DOWNLOADED",
+        "verification_status": "OFFICIAL_MD5",
+        "checksum": "md5:c8fc807773e5354afe61636071771906",
+        "download_url": "https://download.cirros-cloud.net/0.6.2/cirros-0.6.2-x86_64-disk.img",
+        "kernel_compat": "COMPATIBLE",
+        "kernel_path": "/boot/vmlinuz",
+        "initrd_path": "/boot/initrd.img",
+        "cmdline": "console=ttyS0 root=/dev/vda1 ro",
+        "notes": "Official CirrOS 0.6.2 minimal image (not downloaded). Official MD5 from upstream MD5SUMS (c8fc807773e5354afe61636071771906). Status: not boot-tested.",
     },
 ]
 
@@ -292,21 +334,95 @@ def init_db(path=None):
             if col_name not in vm_cols:
                 cursor.execute(f"ALTER TABLE vms ADD COLUMN {col_name} {col_def}")
 
-        img_count = cursor.execute("SELECT count(*) FROM images").fetchone()[0]
-        if img_count == 0:
-            for img in DEFAULT_IMAGES:
+        dec_cols = {col[1] for col in cursor.execute("PRAGMA table_info(decisions)").fetchall()}
+        if "policy" not in dec_cols:
+            cursor.execute("ALTER TABLE decisions ADD COLUMN policy TEXT DEFAULT 'memory_aware'")
+
+        img_cols = {col[1] for col in cursor.execute("PRAGMA table_info(images)").fetchall()}
+        new_img_cols = [
+            ("kernel_path", "TEXT"),
+            ("initrd_path", "TEXT"),
+            ("cmdline", "TEXT DEFAULT 'console=ttyS0 root=/dev/vda1'"),
+        ]
+        for col_name, col_def in new_img_cols:
+            if col_name not in img_cols:
+                cursor.execute(f"ALTER TABLE images ADD COLUMN {col_name} {col_def}")
+
+        for img in DEFAULT_IMAGES:
+            existing = cursor.execute("SELECT 1 FROM images WHERE id = ?", (img["id"],)).fetchone()
+            if not existing:
                 cursor.execute(
                     "INSERT INTO images (id, name, distro, version, arch, format, path, "
                     "disk_size_bytes, status, verification_status, checksum, download_url, "
-                    "created_at, kernel_compat, notes) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "created_at, kernel_compat, notes, kernel_path, initrd_path, cmdline) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (img["id"], img["name"], img["distro"], img["version"],
                      img.get("arch", "x86_64"), img.get("format", "raw"), img.get("path"),
                      img.get("disk_size_bytes"), img.get("status", "AVAILABLE"),
                      img.get("verification_status", "VERIFIED"), img.get("checksum"),
                      img.get("download_url"), time.time(),
-                     img.get("kernel_compat", "COMPATIBLE"), img.get("notes"))
+                     img.get("kernel_compat", "COMPATIBLE"), img.get("notes"),
+                     img.get("kernel_path"), img.get("initrd_path"),
+                     img.get("cmdline", "console=ttyS0 root=/dev/vda1"))
                 )
+
+        # Idempotent startup migration for image catalog integrity
+        # 1. Relabel ubuntu-24-04 from VERIFIED to COMPUTED_LOCALLY and ensure real local sha256
+        cursor.execute(
+            "UPDATE images SET checksum = 'sha256:78c756f1272375e29b03ff62225c9a51e640c55059e745b4a3eca3a1efbdebf0', "
+            "verification_status = 'COMPUTED_LOCALLY' "
+            "WHERE id = 'ubuntu-24-04' AND (verification_status = 'VERIFIED' OR checksum = 'sha256:verified-local')"
+        )
+
+        # 2. Known placeholders to rewrite:
+        # alma-9-official, fedora-40-official, opensuse-15-official, rocky-9-official
+        placeholder_patterns = [
+            "%alma-9-official%",
+            "%fedora-40-official%",
+            "%opensuse-15-official%",
+            "%rocky-9-official%",
+            "%d12bookworm-official%",
+        ]
+        for pat in placeholder_patterns:
+            cursor.execute(
+                "UPDATE images SET checksum = 'no checksum', verification_status = 'UNVERIFIED' "
+                "WHERE checksum LIKE ? AND id != 'debian-12'",
+                (pat,)
+            )
+
+        # For debian-12: replace d12bookworm-official with real computed local checksum
+        cursor.execute(
+            "UPDATE images SET checksum = 'sha256:97df81890768b28518dd236b937f5b59342d6212b48179d8a8b9230c27c6eb27', "
+            "verification_status = 'COMPUTED_LOCALLY', status = 'AVAILABLE' "
+            "WHERE id = 'debian-12' AND (checksum LIKE '%d12bookworm%' OR verification_status = 'OFFICIAL' OR verification_status = 'LOCAL_UNVERIFIED_UPSTREAM')"
+        )
+
+        # Ensure unverified NOT_DOWNLOADED images carry 'no checksum' and verification_status 'UNVERIFIED'
+        cursor.execute(
+            "UPDATE images SET checksum = 'no checksum', verification_status = 'UNVERIFIED' "
+            "WHERE id IN ('almalinux-9', 'fedora-40', 'opensuse-15-6', 'rocky-9') "
+            "AND (checksum LIKE '%official%' OR verification_status = 'OFFICIAL' OR checksum IS NULL)"
+        )
+
+        # 3. CirrOS: remove unofficial SHA-256 and store official MD5
+        cursor.execute(
+            "UPDATE images SET checksum = 'md5:c8fc807773e5354afe61636071771906', "
+            "verification_status = 'OFFICIAL_MD5' "
+            "WHERE id = 'cirros-0-6-2' AND (checksum LIKE 'sha256:%' OR verification_status = 'OFFICIAL' OR verification_status = 'OFFICIAL_MD5_UNOFFICIAL_SHA256')"
+        )
+
+        # 4. Alpine 3.20: ensure verification_status is OFFICIAL_UPSTREAM
+        cursor.execute(
+            "UPDATE images SET verification_status = 'OFFICIAL_UPSTREAM' "
+            "WHERE id = 'alpine-3-20' AND verification_status = 'OFFICIAL'"
+        )
+
+        # 5. Arch Linux: ensure real raw local checksum
+        cursor.execute(
+            "UPDATE images SET checksum = 'sha256:c7d27449e8fa2732a97fcf5c4e56f35762c230873b00328384c1226b2fa30bc9', "
+            "verification_status = 'COMPUTED_LOCALLY' "
+            "WHERE id = 'arch-linux' AND checksum LIKE 'sha256:08754e%'"
+        )
 
 
 def _rows(cur):
@@ -453,12 +569,13 @@ def mark_tombstone_fenced(tombstone_id, path=None):
 
 # ---------- scheduler decisions ----------
 def record_decision(decision, vm_id=None, path=None):
+    policy = getattr(decision, "policy", "memory_aware") or "memory_aware"
     with connect(path) as c:
         c.execute(
             "INSERT INTO decisions (vm_id, at, requested_mb, selected, reason, "
-            "candidates) VALUES (?, ?, ?, ?, ?, ?)",
+            "candidates, policy) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (vm_id, time.time(), decision.requested_mb, decision.selected,
-             decision.reason, json.dumps(decision.candidates)),
+             decision.reason, json.dumps(decision.candidates), policy),
         )
 
 
@@ -468,6 +585,7 @@ def latest_decisions(limit=10, path=None):
             "SELECT * FROM decisions ORDER BY id DESC LIMIT ?", (limit,)))
     for r in rows:
         r["candidates"] = json.loads(r["candidates"])
+        r.setdefault("policy", "memory_aware")
     return rows
 
 
@@ -524,23 +642,26 @@ def upsert_image(image_id, name, distro, version="1.0", arch="x86_64",
                  format="raw", path_img=None, disk_size_bytes=None,
                  status="AVAILABLE", verification_status="VERIFIED",
                  checksum=None, download_url=None, kernel_compat="COMPATIBLE",
-                 notes=None, path=None):
+                 notes=None, kernel_path=None, initrd_path=None,
+                 cmdline="console=ttyS0 root=/dev/vda1", path=None):
     with connect(path) as c:
         c.execute(
             "INSERT INTO images (id, name, distro, version, arch, format, path, "
             "disk_size_bytes, status, verification_status, checksum, download_url, "
-            "created_at, kernel_compat, notes) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            "created_at, kernel_compat, notes, kernel_path, initrd_path, cmdline) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(id) DO UPDATE SET "
             "name=excluded.name, distro=excluded.distro, version=excluded.version, "
             "arch=excluded.arch, format=excluded.format, path=excluded.path, "
             "disk_size_bytes=excluded.disk_size_bytes, status=excluded.status, "
             "verification_status=excluded.verification_status, checksum=excluded.checksum, "
             "download_url=excluded.download_url, kernel_compat=excluded.kernel_compat, "
-            "notes=excluded.notes",
+            "notes=excluded.notes, kernel_path=excluded.kernel_path, "
+            "initrd_path=excluded.initrd_path, cmdline=excluded.cmdline",
             (image_id, name, distro, version, arch, format, path_img,
              disk_size_bytes, status, verification_status, checksum,
-             download_url, time.time(), kernel_compat, notes),
+             download_url, time.time(), kernel_compat, notes,
+             kernel_path, initrd_path, cmdline),
         )
 
 
@@ -549,7 +670,9 @@ def delete_image(image_id, path=None):
         in_use = c.execute("SELECT count(*) FROM vms WHERE image = ?", (image_id,)).fetchone()[0]
         if in_use > 0:
             raise ValueError(f"Image '{image_id}' is in use by VM(s) and cannot be deleted")
-        c.execute("DELETE FROM images WHERE id = ?", (image_id,))
+        r = c.execute("DELETE FROM images WHERE id = ?", (image_id,))
+        if r.rowcount == 0:
+            raise KeyError(f"Image '{image_id}' not found")
 
 
 # ---------- node metrics ----------

@@ -48,6 +48,16 @@ class CgroupManager:
             logger.warning("Cgroup root not found; cgroups disabled")
             return
 
+        # If running inside a systemd delegated subgroup (e.g. DelegateSubgroup=service),
+        # use parent unit cgroup so the service subgroup remains a leaf for clean systemd restarts.
+        parent_cg = own_cg.parent
+        if parent_cg and parent_cg != own_cg and parent_cg.name.endswith(".service"):
+            if self._try_setup_cgroup_dir(parent_cg, move_worker=False):
+                self.base_dir = parent_cg
+                self.enabled = True
+                self.cleanup_empty_leftovers(min_age_seconds=0.0)
+                return
+
         # Strategy 1: Try worker's own cgroup (move worker to child 'worker', enable controllers)
         if self._try_setup_cgroup_dir(own_cg, move_worker=True):
             self.base_dir = own_cg

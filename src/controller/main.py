@@ -8,12 +8,13 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Path as FastPath
+from fastapi import Depends, FastAPI, HTTPException, Path as FastPath, Response
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 import database as db
+import metrics as prom_metrics
 import node_service as ns
 import reconcile as rc
 import vm_service as svc
@@ -94,12 +95,14 @@ class CreateVM(BaseModel):
     user_data: str | None = None
     tags: list[str] = Field(default_factory=list)
     target_node: str | None = None
+    policy: str | None = None
 
 
 class SchedulerPreviewRequest(BaseModel):
     memory_mb: int = Field(ge=128, le=8192)
     vcpus: int = Field(default=1, ge=1, le=8)
     target_node: str | None = None
+    policy: str | None = None
 
 
 class ImportImageRequest(BaseModel):
@@ -231,26 +234,46 @@ def cluster_metrics():
     }
 
 
+@app.get("/metrics", dependencies=auth, response_class=Response)
+def get_prometheus_metrics():
+    """Prometheus exposition format cluster metrics endpoint.
+    
+    Exposes real cluster node, memory, VM, decision refusal, and failover recovery metrics.
+    Authentication: Requires valid Bearer token, matching other controller endpoints.
+    """
+    content = prom_metrics.generate_prometheus_metrics()
+    return Response(content=content, media_type="text/plain; version=0.0.4; charset=utf-8")
+
+
 # ---------- VMs ----------
 @app.post("/vms", status_code=201, dependencies=auth)
 def create_vm(req: CreateVM):
+    if req.image:
+        img = db.get_image(req.image)
+        if not img:
+            raise HTTPException(status_code=422, detail=f"unknown image '{req.image}'")
+
     target = req.target_node
     if target and target != "auto":
         known = {n["id"] for n in db.list_nodes()}
         if target not in known:
             raise HTTPException(status_code=422, detail=f"unknown target_node '{target}'")
 
-    return svc.create_vm(
-        name=req.name,
-        vcpus=req.vcpus,
-        memory_mb=req.memory_mb,
-        disk_gb=req.disk_gb,
-        ha=req.ha,
-        image=req.image,
-        user_data=req.user_data,
-        tags=req.tags,
-        target_node=target,
-    )
+    kwargs = {
+        "name": req.name,
+        "vcpus": req.vcpus,
+        "memory_mb": req.memory_mb,
+        "disk_gb": req.disk_gb,
+        "ha": req.ha,
+        "image": req.image,
+        "user_data": req.user_data,
+        "tags": req.tags,
+        "target_node": target,
+    }
+    if req.policy is not None:
+        kwargs["policy"] = req.policy
+
+    return svc.create_vm(**kwargs)
 
 
 @app.get("/vms", dependencies=auth)
@@ -284,6 +307,23 @@ def decisions(limit: int = 10):
 
 
 # ---------- Scheduler Preview ----------
+@app.get("/scheduler/preview", dependencies=auth)
+def scheduler_preview_get(
+    memory_mb: int = 512,
+    vcpus: int = 1,
+    target_node: str | None = None,
+    policy: str | None = None,
+):
+    return scheduler_preview(
+        SchedulerPreviewRequest(
+            memory_mb=memory_mb,
+            vcpus=vcpus,
+            target_node=target_node,
+            policy=policy,
+        )
+    )
+
+
 @app.post("/scheduler/preview", dependencies=auth)
 def scheduler_preview(req: SchedulerPreviewRequest):
     views = svc.node_views()
@@ -318,14 +358,26 @@ def scheduler_preview(req: SchedulerPreviewRequest):
     if target and target not in all_nodes:
         raise HTTPException(status_code=422, detail=f"unknown target_node '{target}'")
 
-    decision = place(views, req.memory_mb, target_node=target)
+    decision = place(views, req.memory_mb, target_node=target, policy=req.policy)
+
+    policy_choices = {}
+    for pol in ("memory_aware", "first_fit", "best_fit"):
+        d_pol = place(views, req.memory_mb, target_node=target, policy=pol)
+        policy_choices[pol] = {
+            "selected": d_pol.selected,
+            "reason": d_pol.reason,
+            "policy": pol,
+        }
+
     return {
         "requested_mb": req.memory_mb,
         "requested_vcpus": req.vcpus,
+        "policy": decision.policy,
         "recommended_node": decision.selected,
         "reason": decision.reason,
         "can_accommodate": decision.selected is not None,
         "nodes": candidates_info,
+        "policy_choices": policy_choices,
     }
 
 
@@ -446,6 +498,8 @@ def delete_image(image_id: ImageId):
     try:
         db.delete_image(image_id)
         db.record_event("IMAGE_DELETED", f"Unregistered OS image '{image_id}'", details={"image_id": image_id})
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
 

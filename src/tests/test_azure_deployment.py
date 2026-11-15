@@ -377,6 +377,108 @@ def test_vm_creation_command_no_empty_string_arguments():
     assert '"${ZONE_ARGS[@]}"' not in create_sh
 
 
+def test_worker_service_unit_rendering_modes():
+    """Verify systemd worker service unit renders literal host and respects modes."""
+    script_04 = (REPO_ROOT / "scripts" / "azure" / "04-deploy-worker.sh").read_text()
+    assert "Delegate=yes" in script_04
+    assert "DelegateSubgroup=service" in script_04
+    assert "KillMode=process" in script_04
+
+    script_setup = (AZURE_DEPLOY_DIR / "setup_azure_node.sh").read_text()
+    assert "Delegate=yes" in script_setup
+    assert "DelegateSubgroup=service" in script_setup
+    assert "KillMode=process" in script_setup
+
+    def render_unit_from_script(script_text, worker_bind):
+        match = re.search(r"cat > /etc/systemd/system/ps023-worker\.service.*?<< EOF\n(.*?)\nEOF", script_text, re.DOTALL)
+        if not match:
+            match = re.search(r"tee /etc/systemd/system/ps023-worker\.service.*?<< EOF\n(.*?)\nEOF", script_text, re.DOTALL)
+        assert match, "Could not find unit heredoc in script"
+        heredoc = match.group(1)
+
+        bash_cmd = f'''
+        set -euo pipefail
+        WORKER_BIND="{worker_bind}"
+        if [ -z "$WORKER_BIND" ]; then
+          WORKER_BIND="127.0.0.1"
+        fi
+        if [ "$WORKER_BIND" = "10.100.0.2" ]; then
+          WG_WANTS="Wants=network-online.target wg-quick@wg0.service"
+        else
+          WG_WANTS="Wants=network-online.target"
+        fi
+        WORKER_DIR="/opt/ps023-worker"
+        VENV_DIR="$WORKER_DIR/venv"
+        USER="ubuntu"
+        TARGET_USER="ubuntu"
+        cat << EOF
+{heredoc}
+EOF
+        '''
+        res = subprocess.run(["bash", "-c", bash_cmd], capture_output=True, text=True, check=True)
+        return res.stdout
+
+    for script_name, text in [("04-deploy-worker.sh", script_04), ("setup_azure_node.sh", script_setup)]:
+        # 1. Default / SSH mode: should bind 127.0.0.1 literally
+        ssh_unit = render_unit_from_script(text, "127.0.0.1")
+        assert "--host 127.0.0.1 --port 8002" in ssh_unit
+        assert "After=network.target" in ssh_unit
+        assert "wg-quick@wg0.service" in ssh_unit
+        assert "Wants=network-online.target wg-quick@wg0.service" not in ssh_unit
+        assert "Delegate=yes" in ssh_unit
+        assert "DelegateSubgroup=service" in ssh_unit
+        assert "KillMode=process" in ssh_unit
+        assert not re.search(r"--host\s+--port", ssh_unit), "Empty host detected in ExecStart!"
+
+        # 2. WireGuard mode: should bind 10.100.0.2 literally
+        wg_unit = render_unit_from_script(text, "10.100.0.2")
+        assert "--host 10.100.0.2 --port 8002" in wg_unit
+        assert "Wants=network-online.target wg-quick@wg0.service" in wg_unit or "Wants=wg-quick@wg0.service ps023-network.service" in wg_unit
+        assert "After=network.target" in wg_unit
+        assert "Delegate=yes" in wg_unit
+        assert "DelegateSubgroup=service" in wg_unit
+        assert "KillMode=process" in wg_unit
+        assert not re.search(r"--host\s+--port", wg_unit), "Empty host detected in ExecStart!"
+
+        # 3. Fallback when bind is empty: defaults to 127.0.0.1, never empty
+        empty_unit = render_unit_from_script(text, "")
+        assert "--host 127.0.0.1 --port 8002" in empty_unit
+        assert not re.search(r"--host\s+--port", empty_unit), "Empty host detected in ExecStart!"
+
+
+def test_worker_source_resolution_dry_run():
+    """Verify scripts/azure/04-deploy-worker.sh and setup_azure_node.sh resolve src/worker and support --dry-run."""
+    script_04 = REPO_ROOT / "scripts" / "azure" / "04-deploy-worker.sh"
+    setup_sh = AZURE_DEPLOY_DIR / "setup_azure_node.sh"
+
+    # Test 04-deploy-worker.sh --dry-run
+    res_04 = subprocess.run(["bash", str(script_04), "--dry-run"], capture_output=True, text=True)
+    assert res_04.returncode == 0, f"04-deploy-worker.sh --dry-run failed: {res_04.stderr}"
+    assert "Resolved source path:" in res_04.stdout
+    assert "main.py" in res_04.stdout
+    assert "cgroup_manager.py" in res_04.stdout
+
+    # Test setup_azure_node.sh --dry-run
+    res_setup = subprocess.run(["bash", str(setup_sh), "--dry-run"], capture_output=True, text=True)
+    assert res_setup.returncode == 0, f"setup_azure_node.sh --dry-run failed: {res_setup.stderr}"
+    assert "Resolved source path:" in res_setup.stdout
+    assert "main.py" in res_setup.stdout
+    assert "cgroup_manager.py" in res_setup.stdout
+
+    # Test failure when worker directory is missing
+    fake_code = f'''
+    TMPDIR=$(mktemp -d)
+    trap "rm -rf '$TMPDIR'" EXIT
+    mkdir -p "$TMPDIR/scripts/azure"
+    cp "{script_04}" "$TMPDIR/scripts/azure/"
+    cp "{REPO_ROOT}/scripts/azure/common.sh" "$TMPDIR/scripts/azure/"
+    bash "$TMPDIR/scripts/azure/04-deploy-worker.sh" --dry-run
+    '''
+    res_fail = subprocess.run(["bash", "-c", fake_code], capture_output=True, text=True)
+    assert res_fail.returncode == 1, f"Expected script to fail loudly when worker directory is missing: {res_fail.stderr}"
+    assert "Could not resolve valid worker source directory" in res_fail.stderr
+
+
 
 
 

@@ -1,0 +1,45 @@
+=== PS-023 Fallback Chaos Failover & Self-Healing Repeat Test ===
+Date: Sat Nov 14 09:50:32 PM IST 2026
+Environment: Fallback Mode (Nested Node B on 192.168.100.17)
+
+=== [1/4] Baseline Cluster State ===
+Nodes:
+  * Node node-a: status=HEALTHY schedulable_mb=1236 vms_running=0
+  * Node node-b: status=HEALTHY schedulable_mb=2365 vms_running=1
+VMs:
+  * vm-929d5e78 (ha-failover-repeat) [HA]: Node=node-b Status=RUNNING IP=10.77.0.10
+
+=== [2/4] Injecting Failure (Mode: worker) ===
+[2026-11-14 21:50:32] Executing failure injection...
+  Node B worker stopped and all cloud-hypervisor processes killed (VMs gone).
+
+=== [3/4] Detection: Waiting for Node B UNHEALTHY transition ===
+[2026-11-14 21:50:47] Controller marked node-b as UNHEALTHY (detection delay: 14.44s)
+
+=== [4/4] Self-Healing: Monitoring Auto-Evacuation to Node A ===
+
+[2026-11-14 21:50:47] ALL HA VMs Successfully Evacuated to node-a! Total recovery time: 14.49s
+
+Evacuated VM details:
+  * vm-929d5e78 (ha-failover-repeat) -> Node: node-a | Status: RUNNING | IP: 192.168.100.10 | Recovery: 0.53s
+
+Latest Structured Decisions:
+  [vm-929d5e78] node-b UNHEALTHY -> evacuating vm-929d5e78 (ha) -> placed on node-a (free 1128 MB) -> RUNNING in 0.5 s
+  [vm-929d5e78] pinned to target node node-b
+  [vm-3b267eb1] pinned to target node node-a
+=== Self-Healing Verification Complete ===
+
+=== [1/3] Restoring Node B (Mode: worker) ===
+[2026-11-14 21:50:47] Bringing Node B back online...
+  Node B worker service started.
+
+=== [2/3] Waiting for Node B to return to HEALTHY ===
+[2026-11-14 21:50:52] Node B is HEALTHY!
+
+=== [3/3] Fencing Verification: Confirming Stale Copies Cleaned Up ===
+Current VM Placement & States:
+  VM vm-929d5e78 (ha-failover-repeat) -> Node: node-a | Status: RUNNING [HA]
+
+Node B Worker Active VMs (Should NOT contain stale copies of evacuated VMs):
+  Node B reported running VMs: 0
+=== Fencing & Node B Restoration Verified ===

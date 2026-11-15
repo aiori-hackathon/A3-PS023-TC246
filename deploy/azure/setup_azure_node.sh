@@ -9,9 +9,66 @@
 set -euo pipefail
 
 TARGET_USER="${SUDO_USER:-$USER}"
-TARGET_HOME=$(getent passwd "$TARGET_USER" | cut -d: -f6)
+TARGET_HOME=$(getent passwd "$TARGET_USER" | cut -d: -f6 || echo "/home/$TARGET_USER")
 WORKER_DIR="/opt/ps023-worker"
 CH_VERSION="v54.0.0"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# Resolve worker source directory: support src/worker (submit repo) and worker/ (live repo)
+WORKER_SRC=""
+for cand in "$REPO_ROOT/src/worker" "$REPO_ROOT/worker" "$SCRIPT_DIR/../../src/worker" "$SCRIPT_DIR/../../worker" "$TARGET_HOME/src/worker" "$TARGET_HOME/worker" "./src/worker" "./worker"; do
+  if [ -d "$cand" ] && [ -f "$cand/main.py" ] && [ -f "$cand/cgroup_manager.py" ]; then
+    WORKER_SRC="$(cd "$cand" && pwd)"
+    break
+  fi
+done
+
+if [ -z "$WORKER_SRC" ]; then
+  echo "ERROR: Could not resolve valid worker source directory containing main.py and cgroup_manager.py!" >&2
+  echo "Checked candidates:" >&2
+  echo "  - $REPO_ROOT/src/worker" >&2
+  echo "  - $REPO_ROOT/worker" >&2
+  exit 1
+fi
+
+WORKER_MODE="${PS023_WORKER_MODE:-}"
+WORKER_BIND="${PS023_WORKER_BIND:-}"
+DRY_RUN="${DRY_RUN:-0}"
+
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run)
+      DRY_RUN=1
+      ;;
+    --wireguard)
+      WORKER_MODE="wireguard"
+      ;;
+    --ssh)
+      WORKER_MODE="ssh"
+      ;;
+  esac
+done
+
+if [ -z "$WORKER_BIND" ]; then
+  if [ "$WORKER_MODE" = "wireguard" ]; then
+    WORKER_BIND="10.100.0.2"
+  else
+    WORKER_BIND="127.0.0.1"
+  fi
+fi
+
+if [ "$DRY_RUN" = "1" ]; then
+  echo "=== [DRY RUN] setup_azure_node.sh ==="
+  echo "REPO_ROOT: $REPO_ROOT"
+  echo "SCRIPT_DIR: $SCRIPT_DIR"
+  echo "Resolved source path: $WORKER_SRC"
+  echo "Worker bind host: $WORKER_BIND"
+  echo "Files that would be copied to Node B ($WORKER_DIR/):"
+  ls -1 "$WORKER_SRC"
+  exit 0
+fi
 
 echo "======================================================================"
 echo " PS-023: Microsoft Azure Node B Deployment Setup"
@@ -196,17 +253,11 @@ sudo systemctl enable ps023-network.service
 # 7. Setting Up Worker Directory & Python Virtual Environment
 # ------------------------------------------------------------------------------
 echo "=== [7/8] Provisioning Worker Directory & Environment ==="
-sudo mkdir -p "$WORKER_DIR" "$WORKER_DIR/vms" "$WORKER_DIR/images" "$WORKER_DIR/kernel"
+sudo mkdir -p "$WORKER_DIR" "$WORKER_DIR/vms" "$WORKER_DIR/images" "$WORKER_DIR/kernel" "$WORKER_DIR/worker"
 sudo chown -R "$TARGET_USER:$TARGET_USER" "$WORKER_DIR"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [ -f "$SCRIPT_DIR/../../worker/main.py" ]; then
-  cp -r "$SCRIPT_DIR/../../worker/"* "$WORKER_DIR/"
-elif [ -f "$TARGET_HOME/worker/main.py" ]; then
-  cp -r "$TARGET_HOME/worker/"* "$WORKER_DIR/"
-elif [ -f "./worker/main.py" ]; then
-  cp -r ./worker/* "$WORKER_DIR/"
-fi
+cp -r "$WORKER_SRC/"* "$WORKER_DIR/"
+cp -r "$WORKER_SRC/"* "$WORKER_DIR/worker/" 2>/dev/null || true
 
 # Set up dedicated Python virtual environment for worker
 if [ ! -d "$WORKER_DIR/venv" ]; then
@@ -217,8 +268,9 @@ fi
 
 # Prepare worker.env template if not already present
 if [ ! -f "$WORKER_DIR/worker.env" ]; then
-  cat > "$WORKER_DIR/worker.env" << 'EOF'
+  cat > "$WORKER_DIR/worker.env" << EOF
 PS023_NODE_ID=node-b
+PS023_WORKER_BIND=$WORKER_BIND
 PS023_WORKER_TOKEN=REPLACE_WITH_PS023_TOKEN_NODE_B
 PS023_SUBNET=192.168.200
 PS023_SLOT_START=0
@@ -233,14 +285,20 @@ EOF
 fi
 
 # ------------------------------------------------------------------------------
-# 8. Creating Systemd Service for Worker (10.100.0.2:8002)
+# 8. Creating Systemd Service for Worker ($WORKER_BIND:8002)
 # ------------------------------------------------------------------------------
-echo "=== [8/8] Creating Systemd Service for Worker (WireGuard private IP) ==="
+echo "=== [8/8] Creating Systemd Service for Worker ($WORKER_BIND) ==="
+if [ "$WORKER_BIND" = "10.100.0.2" ]; then
+  WG_WANTS="Wants=wg-quick@wg0.service ps023-network.service"
+else
+  WG_WANTS="Wants=ps023-network.service"
+fi
+
 sudo tee /etc/systemd/system/ps023-worker.service > /dev/null << EOF
 [Unit]
 Description=PS-023 Cloud Hypervisor Worker Agent (Node B - Azure)
 After=network.target ps023-network.service wg-quick@wg0.service
-Wants=wg-quick@wg0.service ps023-network.service
+$WG_WANTS
 
 [Service]
 Type=simple
@@ -248,7 +306,7 @@ User=$TARGET_USER
 Group=$TARGET_USER
 WorkingDirectory=$WORKER_DIR
 EnvironmentFile=$WORKER_DIR/worker.env
-ExecStart=$WORKER_DIR/venv/bin/uvicorn main:app --host 10.100.0.2 --port 8002
+ExecStart=$WORKER_DIR/venv/bin/uvicorn main:app --host $WORKER_BIND --port 8002
 Restart=always
 RestartSec=3
 LimitNOFILE=65536

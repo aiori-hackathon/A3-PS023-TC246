@@ -76,6 +76,7 @@ export interface VM {
   image?: string;
   ha?: boolean;
   evacuation_error?: string | null;
+  evacuation_retries?: number;
   recovery_time_s?: number | null;
   cgroups?: boolean;
   cgroup_limits?: {
@@ -102,6 +103,7 @@ export interface Decision {
   requested_mb: number;
   selected: string | null;
   reason: string;
+  policy?: string;
   candidates: Candidate[];
 }
 

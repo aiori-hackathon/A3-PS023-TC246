@@ -1,0 +1,96 @@
+================================================================================
+PS-023 SCHEDULER POLICY COMPARISON (SIMULATION)
+Pure Python deterministic workload replay (20 operations)
+STATUS: SIMULATION ONLY (No live hypervisors or cloud VMs modified)
+================================================================================
+
+Initial Node Schedulable Capacities: {'node-a': 8192, 'node-b': 4096, 'node-c': 6144}
+Total Workload Steps: 20
+
+--- Policy: memory_aware ---
+Summary: Placed=14, Refused=2, Final Active VMs=10
+Final Node Headroom (MB): {'node-a': 5120, 'node-b': 0, 'node-c': 0}
+Execution Trace:
+  Step 01: CREATE vm-01 (1024MB) -> PLACED on node-a (reason: highest available memory)
+  Step 02: CREATE vm-02 (2048MB) -> PLACED on node-a (reason: highest available memory)
+  Step 03: CREATE vm-03 (512MB) -> PLACED on node-c (reason: highest available memory)
+  Step 04: CREATE vm-04 (4096MB) -> PLACED on node-c (reason: highest available memory)
+  Step 05: CREATE vm-05 (1024MB) -> PLACED on node-a (reason: highest available memory)
+  Step 06: DELETE vm-02 (2048MB) -> RELEASED on node-a
+  Step 07: CREATE vm-06 (2048MB) -> PLACED on node-a (reason: highest available memory)
+  Step 08: CREATE vm-07 (1024MB) -> PLACED on node-b (reason: highest available memory)
+  Step 09: CREATE vm-08 (4096MB) -> PLACED on node-a (reason: highest available memory)
+  Step 10: DELETE vm-04 (4096MB) -> RELEASED on node-c
+  Step 11: CREATE vm-09 (512MB) -> PLACED on node-c (reason: highest available memory)
+  Step 12: CREATE vm-10 (2048MB) -> PLACED on node-c (reason: highest available memory)
+  Step 13: CREATE vm-11 (1024MB) -> PLACED on node-c (reason: highest available memory)
+  Step 14: CREATE vm-12 (4096MB) -> REFUSED (reason: no healthy node has enough memory)
+  Step 15: DELETE vm-01 (1024MB) -> RELEASED on node-a
+  Step 16: CREATE vm-13 (1024MB) -> PLACED on node-b (reason: highest available memory)
+  Step 17: CREATE vm-14 (2048MB) -> PLACED on node-c (reason: highest available memory)
+  Step 18: CREATE vm-15 (4096MB) -> REFUSED (reason: no healthy node has enough memory)
+  Step 19: CREATE vm-16 (2048MB) -> PLACED on node-b (reason: highest available memory)
+  Step 20: DELETE vm-08 (4096MB) -> RELEASED on node-a
+
+--- Policy: first_fit ---
+Summary: Placed=14, Refused=2, Final Active VMs=10
+Final Node Headroom (MB): {'node-a': 1024, 'node-b': 0, 'node-c': 4096}
+Execution Trace:
+  Step 01: CREATE vm-01 (1024MB) -> PLACED on node-a (reason: first fit with sufficient memory)
+  Step 02: CREATE vm-02 (2048MB) -> PLACED on node-a (reason: first fit with sufficient memory)
+  Step 03: CREATE vm-03 (512MB) -> PLACED on node-a (reason: first fit with sufficient memory)
+  Step 04: CREATE vm-04 (4096MB) -> PLACED on node-a (reason: first fit with sufficient memory)
+  Step 05: CREATE vm-05 (1024MB) -> PLACED on node-b (reason: first fit with sufficient memory)
+  Step 06: DELETE vm-02 (2048MB) -> RELEASED on node-a
+  Step 07: CREATE vm-06 (2048MB) -> PLACED on node-a (reason: first fit with sufficient memory)
+  Step 08: CREATE vm-07 (1024MB) -> PLACED on node-b (reason: first fit with sufficient memory)
+  Step 09: CREATE vm-08 (4096MB) -> PLACED on node-c (reason: first fit with sufficient memory)
+  Step 10: DELETE vm-04 (4096MB) -> RELEASED on node-a
+  Step 11: CREATE vm-09 (512MB) -> PLACED on node-a (reason: first fit with sufficient memory)
+  Step 12: CREATE vm-10 (2048MB) -> PLACED on node-a (reason: first fit with sufficient memory)
+  Step 13: CREATE vm-11 (1024MB) -> PLACED on node-a (reason: first fit with sufficient memory)
+  Step 14: CREATE vm-12 (4096MB) -> REFUSED (reason: no healthy node has enough memory)
+  Step 15: DELETE vm-01 (1024MB) -> RELEASED on node-a
+  Step 16: CREATE vm-13 (1024MB) -> PLACED on node-a (reason: first fit with sufficient memory)
+  Step 17: CREATE vm-14 (2048MB) -> PLACED on node-b (reason: first fit with sufficient memory)
+  Step 18: CREATE vm-15 (4096MB) -> REFUSED (reason: no healthy node has enough memory)
+  Step 19: CREATE vm-16 (2048MB) -> PLACED on node-c (reason: first fit with sufficient memory)
+  Step 20: DELETE vm-08 (4096MB) -> RELEASED on node-c
+
+--- Policy: best_fit ---
+Summary: Placed=13, Refused=3, Final Active VMs=9
+Final Node Headroom (MB): {'node-a': 4096, 'node-b': 1024, 'node-c': 0}
+Execution Trace:
+  Step 01: CREATE vm-01 (1024MB) -> PLACED on node-b (reason: smallest sufficient memory)
+  Step 02: CREATE vm-02 (2048MB) -> PLACED on node-b (reason: smallest sufficient memory)
+  Step 03: CREATE vm-03 (512MB) -> PLACED on node-b (reason: smallest sufficient memory)
+  Step 04: CREATE vm-04 (4096MB) -> PLACED on node-c (reason: smallest sufficient memory)
+  Step 05: CREATE vm-05 (1024MB) -> PLACED on node-c (reason: smallest sufficient memory)
+  Step 06: DELETE vm-02 (2048MB) -> RELEASED on node-b
+  Step 07: CREATE vm-06 (2048MB) -> PLACED on node-b (reason: smallest sufficient memory)
+  Step 08: CREATE vm-07 (1024MB) -> PLACED on node-c (reason: smallest sufficient memory)
+  Step 09: CREATE vm-08 (4096MB) -> PLACED on node-a (reason: smallest sufficient memory)
+  Step 10: DELETE vm-04 (4096MB) -> RELEASED on node-c
+  Step 11: CREATE vm-09 (512MB) -> PLACED on node-b (reason: smallest sufficient memory)
+  Step 12: CREATE vm-10 (2048MB) -> PLACED on node-a (reason: smallest sufficient memory)
+  Step 13: CREATE vm-11 (1024MB) -> PLACED on node-a (reason: smallest sufficient memory)
+  Step 14: CREATE vm-12 (4096MB) -> PLACED on node-c (reason: smallest sufficient memory)
+  Step 15: DELETE vm-01 (1024MB) -> RELEASED on node-b
+  Step 16: CREATE vm-13 (1024MB) -> PLACED on node-a (reason: smallest sufficient memory)
+  Step 17: CREATE vm-14 (2048MB) -> REFUSED (reason: no healthy node has enough memory)
+  Step 18: CREATE vm-15 (4096MB) -> REFUSED (reason: no healthy node has enough memory)
+  Step 19: CREATE vm-16 (2048MB) -> REFUSED (reason: no healthy node has enough memory)
+  Step 20: DELETE vm-08 (4096MB) -> RELEASED on node-a
+
+================================================================================
+COMPARATIVE POLICY ANALYSIS & INVARIANTS
+================================================================================
+- memory_aware: Placed=14, Refused=2, Remaining Free Headroom: {'node-a': 5120, 'node-b': 0, 'node-c': 0}
+- first_fit   : Placed=14, Refused=2, Remaining Free Headroom: {'node-a': 1024, 'node-b': 0, 'node-c': 4096}
+- best_fit    : Placed=13, Refused=3, Remaining Free Headroom: {'node-a': 4096, 'node-b': 1024, 'node-c': 0}
+
+Observations:
+1. memory_aware (default): Spreads allocations to maintain maximum available headroom across all cluster nodes.
+2. first_fit: Greedily fills the first eligible host in lexical order, clustering allocations on node-a.
+3. best_fit: Tightly packs microVMs onto the smallest sufficient capacity node, preserving large contiguous memory blocks on larger hosts for high-RAM workloads.
+================================================================================
