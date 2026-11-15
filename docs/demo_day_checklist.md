@@ -70,22 +70,27 @@ If any live technical dependency fluctuates, seamlessly transition down the ladd
 2. **Tier 2 (Recorded Cloud Evidence Reference)**:
    - If questioned on multi-node / cloud deployment, present historical Azure benchmark runs recorded on 13–14 Nov 2026.
    - Show [evidence/chaos_azure_repeats_20261114.txt](file:///home/rajyavardhan/ps023/evidence/chaos_azure_repeats_20261114.txt) (6 runs over SSH tunnel; total recovery **15.35 s – 21.05 s**) and [evidence/wireguard_hotspot_20261114.txt](file:///home/rajyavardhan/ps023/evidence/wireguard_hotspot_20261114.txt) (WireGuard verified over mobile hotspot).
-3. **Tier 3 (Automated Rehearsal & Backup Video)**:
-   - If live execution is disrupted, present the 3 automated rehearsal runs ([demo_rehearsal_run1/2/3_20261115.txt](file:///home/rajyavardhan/ps023/evidence/demo_rehearsal_run1_20261115.txt)) where the entire 8-step demo completed through the REST API in **86.49 s – 91.76 s** with 0 errors.
-   - Refer to [docs/demo_shotlist.md](file:///home/rajyavardhan/ps023/docs/demo_shotlist.md) for recorded video structure.
+3. **Tier 3 (Backup Video & Automation)**:
+   - **Backup Video**: Planned according to [docs/demo_shotlist.md](file:///home/rajyavardhan/ps023/docs/demo_shotlist.md) (**not recorded yet** until video is produced).
+   - **Automated Rehearsal Runs**: If live execution is disrupted, present the 3 verified automated rehearsal runs ([demo_rehearsal_run1/2/3_20261115.txt](file:///home/rajyavardhan/ps023/evidence/demo_rehearsal_run1_20261115.txt)) where the entire 8-step demo completed through the REST API in **86.49 s – 91.76 s** with 0 errors.
 
 ---
 
 ## 5. Rollback Commands for Code & Disks
 
-If local code or disk state is ever corrupted:
-
-1. **Rollback Controller & Worker Python Code**:
+1. **Create Known-Good Snapshot**:
    ```bash
-   rsync -ac "/home/rajyavardhan/ps023_backups/backup_20261114_190823/controller/" "/home/rajyavardhan/ps023/controller/"
-   rsync -ac "/home/rajyavardhan/ps023_backups/backup_20261114_190823/worker/" "/home/rajyavardhan/ps023/worker/"
+   # Creates ~/ps023_backups/known_good_<timestamp>/ containing controller/ and worker/
+   bash ~/ps023/scripts/make_known_good_backup.sh
    ```
-2. **Restore Nested Node B Disk Image from Verified Backup**:
+
+2. **Rollback Controller & Worker Python Code from KNOWN_GOOD**:
+   ```bash
+   # Replace KNOWN_GOOD with the desired backup directory name (e.g. known_good_20261115_230520)
+   rsync -ac "$HOME/ps023_backups/KNOWN_GOOD/controller/" "$HOME/ps023/controller/"
+   rsync -ac "$HOME/ps023_backups/KNOWN_GOOD/worker/" "$HOME/ps023/worker/"
+   ```
+3. **Restore Nested Node B Disk Image from Verified Backup**:
    ```bash
    # Restores clean 20GB raw image with DelegateSubgroup=service & cgroups fixes applied
    cp --sparse=always /home/rajyavardhan/ps023_backups/nested_node_b_disk_20261115.raw /home/rajyavardhan/ps023/outer/disk.raw
@@ -100,5 +105,5 @@ If local code or disk state is ever corrupted:
 | **1. Node A RAM drops / 409 capacity refusal** | `free -m` shows < 1500 MB available RAM | Close browser/Electron apps. Run `scripts/demo_preflight.sh` to confirm schedulable RAM > 1500 MB. |
 | **2. Nested Node B unresponsive / SSH timeout** | `ping -c 2 192.168.100.17` fails | Restart outer VMM: `pkill -f 'outer.sock' && bash ~/ps023/outer/start-outer.sh &` then re-run `bring-up.sh`. |
 | **3. Port conflict (8000, 8001, 8002 occupied)** | `ss -tulpn \| grep -E ':(8000\|8001\|8002)\b'` | Kill lingering instances: `pkill -f 'uvicorn.*main:app'` and check `ss -tulpn`. |
-| **4. Stale cgroups / VM deletion stuck** | `find /sys/fs/cgroup -name "ps023-vmm*"` | Stop all Cloud Hypervisor processes: `pkill -x cloud-hypervisor` then delete cgroup directories. |
+| **4. Stale cgroups / VM deletion stuck** | `find /sys/fs/cgroup -name "ps023-vmm*"` | Targeted kill by VM socket: `pkill -f "cloud-hypervisor.*api-socket.*/<vm_id>\.sock"` (or `kill -9 <PID>` from `cgroup.procs`), then remove cgroup slice. (Nested Node B outer VMM restart line stays as is: `pkill -f 'outer.sock'`). |
 | **5. Live demo HA evacuation stalls** | Evacuation exceeds 30 seconds | Fall back immediately to Tier 2: open and present raw data in `evidence/chaos_fallback_repeats_20261115.txt`. |

@@ -1,7 +1,7 @@
 # PS-023: Hackathon Presentation Deck Outline & Jury Defense Guide
 **Standard Format**: AIORI Hackathon Structure (`Proposed-structure-hackathon.pdf`)  
 **Target Environment**: Primary Local Fallback (Direct KVM Node A + Nested KVM Node B) & Azure Hybrid Reference  
-**Deck Generation Status**: `python-pptx` is installed in `~/ps023/.venv/` (slide deck generation deferred per user instruction; complete presentation markdown, diagram sources, data tables, and slide contents are fully rendered below for slide authoring).
+**Deck Generation Status**: Built at [docs/deck/ps023_draft.pptx](file:///home/rajyavardhan/ps023/docs/deck/ps023_draft.pptx) (18 slides; diagrams rendered via matplotlib; rendered slide PNGs in [docs/deck/slides/](file:///home/rajyavardhan/ps023/docs/deck/slides/)).
 
 ---
 

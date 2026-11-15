@@ -12,7 +12,8 @@ ORPHAN_MIN_AGE_S = 120   # only remove unknown worker VMs older than this
 
 
 def _log(msg):
-    print("reconcile:", msg, flush=True)
+    ts = time.strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{ts}] reconcile: {msg}", flush=True)
 
 
 def _mark_unknown(node, path):

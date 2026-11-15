@@ -44,30 +44,49 @@ else
     pass "Host memory sufficient: ${AVAIL_RAM} MB available / ${TOTAL_RAM} MB total"
 fi
 
+# (b) Swap Check: WARN > 1024 MB, FAIL > 4096 MB
 if [ "$USED_SWAP" -gt 4096 ]; then
-    warn "Host swap usage is high: ${USED_SWAP} MB / ${TOTAL_SWAP} MB (consider closing heavy apps)"
+    fail "Host swap usage is critically high: ${USED_SWAP} MB / ${TOTAL_SWAP} MB (must be <= 4096 MB)"
+elif [ "$USED_SWAP" -gt 1024 ]; then
+    warn "Host swap usage exceeds 1024 MB: ${USED_SWAP} MB / ${TOTAL_SWAP} MB (consider closing heavy apps)"
 else
     pass "Swap usage normal: ${USED_SWAP} MB used / ${TOTAL_SWAP} MB total"
 fi
 
-# 2. Available RAM vs HOST_RESERVE_MB (1024 MB)
+# 2. Available RAM vs HOST_RESERVE_MB (1024 MB) & Nested Node B VMM accounting
 HOST_RESERVE_MB=1024
-if [ "$AVAIL_RAM" -gt "$HOST_RESERVE_MB" ]; then
-    SCHED_MB=$((AVAIL_RAM - HOST_RESERVE_MB))
+OUTER_CFG="/home/rajyavardhan/ps023/outer/start-outer.sh"
+NESTED_VMM_MB=4096
+if [ -f "$OUTER_CFG" ]; then
+    MEM_STR=$(grep -E -o -- '--memory size=[0-9]+[GM]' "$OUTER_CFG" | head -n1 | cut -d= -f2 || true)
+    if [[ "$MEM_STR" =~ ([0-9]+)G ]]; then
+        NESTED_VMM_MB=$((${BASH_REMATCH[1]} * 1024))
+    elif [[ "$MEM_STR" =~ ([0-9]+)M ]]; then
+        NESTED_VMM_MB=${BASH_REMATCH[1]}
+    fi
+fi
+
+# Determine if nested outer VMM is already active
+OUTER_RUNNING=$(pgrep -f "outer.sock" 2>/dev/null || true)
+if [ -n "$OUTER_RUNNING" ]; then
+    SCHED_AFTER=$((AVAIL_RAM > HOST_RESERVE_MB ? AVAIL_RAM - HOST_RESERVE_MB : 0))
+    SCHED_BEFORE=$((SCHED_AFTER + NESTED_VMM_MB))
 else
-    SCHED_MB=0
+    SCHED_BEFORE=$((AVAIL_RAM > HOST_RESERVE_MB ? AVAIL_RAM - HOST_RESERVE_MB : 0))
+    SCHED_AFTER=$((SCHED_BEFORE > NESTED_VMM_MB ? SCHED_BEFORE - NESTED_VMM_MB : 0))
 fi
 
 echo "--------------------------------------------------------------------------------"
-echo "node A schedulable memory will be about ${SCHED_MB} MB"
+echo "node A schedulable memory: before nested VMM: about ${SCHED_BEFORE} MB"
+echo "node A schedulable memory: expected after bring-up: about ${SCHED_AFTER} MB (accounts for ${NESTED_VMM_MB} MB nested node B)"
 echo "--------------------------------------------------------------------------------"
 
-if [ "$SCHED_MB" -lt 512 ]; then
-    fail "Node A schedulable memory (${SCHED_MB} MB) is below 512 MB minimum"
-elif [ "$SCHED_MB" -lt 1500 ]; then
-    warn "Node A schedulable memory (${SCHED_MB} MB) is below 1500 MB headroom guideline"
+if [ "$SCHED_AFTER" -lt 512 ]; then
+    fail "Expected post-bringup schedulable memory (${SCHED_AFTER} MB) is below 512 MB minimum"
+elif [ "$SCHED_AFTER" -lt 1500 ]; then
+    warn "Expected post-bringup schedulable memory (${SCHED_AFTER} MB) is below 1500 MB headroom guideline"
 else
-    pass "Node A schedulable headroom healthy: ${SCHED_MB} MB (reserve: ${HOST_RESERVE_MB} MB)"
+    pass "Node A schedulable headroom healthy: ${SCHED_AFTER} MB expected post-bringup (reserve: ${HOST_RESERVE_MB} MB, nested node B: ${NESTED_VMM_MB} MB)"
 fi
 
 # 3. Check for stale cloud-hypervisor processes
