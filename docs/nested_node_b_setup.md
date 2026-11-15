@@ -12,7 +12,7 @@ This document records the persistence architecture of the Nested Node B virtual 
   - As defined in [start-outer.sh](file:///home/rajyavardhan/ps023/outer/start-outer.sh), Cloud Hypervisor directly attaches `--disk path=$D/disk.raw,image_type=raw`.
   - The script does **not** re-clone or re-seed `disk.raw` during `bring-up.sh`. Any system package installations, systemd unit definitions, and python files written to the inner filesystem persist across reboots and bring-up invocations.
 - **Backup Image**:
-  - **Path**: `/home/rajyavardhan/ps023_backups/nested_node_b_disk_20261115.raw`
+  - **Path**: [nested_node_b_disk_20261115.raw](file:///home/rajyavardhan/ps023_backups/nested_node_b_disk_20261115.raw)
   - **Size**: 20 GiB virtual (6.7 GiB allocated on disk via sparse copy).
   - **Permissions**: `0600` (`-rw-------.`, owned by user `rajyavardhan`, outside git).
 

@@ -2,7 +2,7 @@
 
 ## 1. Executive Overview
 
-PS-023 is a lightweight, distributed MicroVM orchestration platform designed for Cloud Hypervisor on Linux with cgroups v2 resource guarantees. The platform enables multi-tenant virtual machine lifecycle management, pluggable policy scheduling, real-time in-browser terminal access, and sub-second cold failover across heterogeneous compute infrastructure.
+PS-023 is a lightweight, distributed MicroVM orchestration platform designed for Cloud Hypervisor on Linux with cgroups v2 resource guarantees. The platform enables multi-tenant virtual machine lifecycle management, pluggable policy scheduling, real-time in-browser terminal access, and automated cold failover (14.3 s – 16.4 s total recovery, 0.00 s – 0.70 s cold evacuation on surviving node) across heterogeneous compute infrastructure.
 
 ---
 
@@ -42,5 +42,7 @@ PS-023 is a lightweight, distributed MicroVM orchestration platform designed for
 
 ### 4. High-Availability Auto-Evacuation
 - Automatically respawns `ha=true` MicroVMs when their host node fails.
-- Cold failover completes in **0.00 s – 0.70 s** on local fallback nodes.
-- When failed node rejoins, split-brain fencing pass terminates stale copies within **2.0 s – 9.3 s**.
+- **Total Recovery**: **14.33 s – 16.39 s** on fallback (Azure historical: **15.35 s – 21.05 s**, recorded over SSH tunnel).
+- **Failure Detection**: Accounts for about 14–20 s (13.83 s – 15.70 s fallback; 15.32 s – 19.99 s Azure).
+- **Cold Evacuation**: Accounts for about 0.4–0.7 s (0.00 s – 0.70 s fallback; 0.35 s – 0.36 s Azure) on the surviving node.
+- When failed node rejoins, split-brain fencing pass terminates stale copies within **2.0 s – 9.33 s** post-return.

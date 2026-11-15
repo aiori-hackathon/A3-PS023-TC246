@@ -9,9 +9,9 @@ This index maps every performance claim, benchmark figure, and operational metri
 | Metric / Claim | Measured Value / Range | Evidence File | Line(s) | Status |
 | :--- | :--- | :--- | :--- | :--- |
 | **Node A Kernel Initialization** | 327 ms – 474 ms | [boot_node_a_bimodality_20261114.txt](file:///home/rajyavardhan/ps023/evidence/boot_node_a_bimodality_20261114.txt) | L33–L46, L59 | **VERIFIED** |
-| **Node A API Create -> Status RUNNING** | 0.772 s – 0.997 s | [boot_node_a_bimodality_20261114.txt](file:///home/rajyavardhan/ps023/evidence/boot_node_a_bimodality_20261114.txt) | L13–L27 | **VERIFIED** |
-| **Node A Full Boot (API -> SSH Ready, 15 pooled runs)** | Min: 7.058 s, Median: 8.372 s, Max: 16.398 s | [boot_node_a_bimodality_20261114.txt](file:///home/rajyavardhan/ps023/evidence/boot_node_a_bimodality_20261114.txt) | L49–L55 | **VERIFIED** |
-| **Node A Boot with Nested Node B Co-Location (20 runs)** | Min: 6.846 s, Median: 8.460 s, Max: 11.257 s | [boot_node_a_contention_20261114.txt](file:///home/rajyavardhan/ps023/evidence/boot_node_a_contention_20261114.txt) | L35–L48 | **VERIFIED** |
+| **Node A API Create -> Status RUNNING** | 0.772 s – 0.997 s (Min: 0.751 s in 20-run set) | [boot_node_a_bimodality_20261114.txt](file:///home/rajyavardhan/ps023/evidence/boot_node_a_bimodality_20261114.txt) | L13–L27 | **VERIFIED** |
+| **Node A Full Boot (Primary 20-Run Contention Set)** | Min: 6.846 s, Median: 8.460 s, Max: 11.257 s | [boot_node_a_contention_20261114.txt](file:///home/rajyavardhan/ps023/evidence/boot_node_a_contention_20261114.txt) | L45–L48 | **VERIFIED** |
+| **Node A Full Boot (Diagnostic 15-Run Bimodality Set)** | Min: 7.058 s, Median: 8.372 s, Max: 16.398 s (pollinate delay observed in 1 of 5 instrumented runs; cause not established; host-contention test did not show an effect) | [boot_node_a_bimodality_20261114.txt](file:///home/rajyavardhan/ps023/evidence/boot_node_a_bimodality_20261114.txt) | L49–L55 | **VERIFIED** |
 | **Node B Nested API Create -> Status RUNNING** | 3.222 s – 3.994 s (median 3.497 s) | [boot_test_fallback_20261114.txt](file:///home/rajyavardhan/ps023/evidence/boot_test_fallback_20261114.txt) | L41–L45 | **VERIFIED** |
 | **Node B Nested Full Boot (API -> SSH Ready)** | 11.775 s – 19.027 s (median 13.130 s) | [boot_test_fallback_20261114.txt](file:///home/rajyavardhan/ps023/evidence/boot_test_fallback_20261114.txt) | L46–L50 | **VERIFIED** |
 | **Azure Node B Boot Speed** | *Not measured separately from Azure chaos runs* | — | — | **Not measured** |
@@ -32,6 +32,9 @@ Source: [chaos_fallback_repeats_20261115.txt](file:///home/rajyavardhan/ps023/ev
 | **Run 5** | `worker-preserve-vms` | 14.74 s | 0.00 s | 14.74 s | KILLED (6.75s post-return) | L193 |
 | **Run 6** | `worker-preserve-vms` | 15.70 s | 0.70 s | 16.39 s | KILLED (9.33s post-return) | L194 |
 
+*Note on Run 5 (0.00 s Evacuation)*: The controller background polling loop executed node failure detection and evacuation placement synchronously in the same tick (<0.005 s delta).  
+*Note on Run 6 (9.33 s Fencing)*: Node B returned mid-cycle of the 5s reconcile loop (~4.5s wait); worker stop escalation took ~3.5s; client 1s poll interval verified 0 stale VMMs at 9.33s.
+
 ### B. Azure Hybrid Cloud Environment (Historical Recorded Runs, 13–14 Nov 2026)
 Source: [chaos_azure_repeats_20261114.txt](file:///home/rajyavardhan/ps023/evidence/chaos_azure_repeats_20261114.txt) (Transport: SSH tunnel / sshuttle)
 
@@ -43,6 +46,8 @@ Source: [chaos_azure_repeats_20261114.txt](file:///home/rajyavardhan/ps023/evide
 | **Run 4** | `worker-preserve-vms` | 17.44 s | 0.35 s | 18.50 s | Evacuated to RUNNING | L405 |
 | **Run 5** | `worker-preserve-vms` | 18.60 s | 0.36 s | 18.63 s | Evacuated to RUNNING | L406 |
 | **Run 6** | `worker-preserve-vms` | 15.92 s | 0.36 s | 15.97 s | Evacuated to RUNNING | L407 |
+
+*Note on Azure Suite*: Total recovery ranges from **15.35 s to 21.05 s**. Detection is 15.32 s – 19.99 s (~15–20 s of total), and cold evacuation is 0.35 s – 0.36 s.
 
 ---
 
@@ -83,7 +88,7 @@ Source: [chaos_azure_repeats_20261114.txt](file:///home/rajyavardhan/ps023/evide
 | :--- | :--- | :--- | :--- | :--- |
 | **Local Bridge (`br-ps023`) Routing** | Direct subnet routing `10.77.0.0/24` via `192.168.100.17` | [demo-script.md](file:///home/rajyavardhan/ps023/docs/demo-script.md) | L31–L32 | **VERIFIED** |
 | **WireGuard Handshake (Mobile Hotspot)** | Successful bidirectional handshake (1.78 KiB recv, 1.91 KiB sent) | [wireguard_hotspot_20261114.txt](file:///home/rajyavardhan/ps023/evidence/wireguard_hotspot_20261114.txt) | L22–L28, L35–L40 | **VERIFIED** |
-| **WireGuard Ping RTT (Mobile Hotspot)** | Min: 68.3 ms, Avg: 154.5 ms – 189.8 ms | [wireguard_hotspot_20261114.txt](file:///home/rajyavardhan/ps023/evidence/wireguard_hotspot_20261114.txt) | L49–L63 | **VERIFIED** |
+| **WireGuard Raw Ping RTT (Mobile Hotspot)** | Node A -> Node B: `rtt min/avg/max/mdev = 76.865/154.511/215.156/61.235 ms`<br>Node B -> Node A: `rtt min/avg/max/mdev = 68.312/189.759/473.877/167.117 ms`<br>*(Earlier interactive pre-test on 14 Nov logged: A->B 441.368 ms avg; B->A 134.855 ms avg)* | [wireguard_hotspot_20261114.txt](file:///home/rajyavardhan/ps023/evidence/wireguard_hotspot_20261114.txt) | L49–L52, L60–L63 | **VERIFIED** |
 | **WireGuard on Hostel Wi-Fi** | Blocked by local network UDP 51820 firewall filter | [wireguard_hotspot_20261114.txt](file:///home/rajyavardhan/ps023/evidence/wireguard_hotspot_20261114.txt)<br>[demo-script.md](file:///home/rajyavardhan/ps023/docs/demo-script.md) | L75–L80<br>L6 | **VERIFIED BLOCKED** |
 | **Network Throughput / Bandwidth** | *Not measured* | — | — | **Not measured** |
 

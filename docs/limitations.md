@@ -37,20 +37,23 @@ This document explicitly details the known architectural boundaries, environment
 
 - **Cold Failover vs. Live Migration**:
   Failover of high-availability workloads (`ha=true`) is implemented as **cold failover**, not live memory migration.
-  - When a node is declared `UNHEALTHY` (heartbeat failure detection ~13–15 s), the controller reschedules the VM onto a surviving healthy node and executes a fresh MicroVM cold boot.
+  - **Total Recovery**: **14.33 s – 16.39 s** in fallback testing (historical Azure: **15.35 s – 21.05 s**, recorded over SSH tunnel).
+  - **Failure Detection**: Accounts for about 14–20 s of total recovery (13.83 s – 15.70 s fallback; 15.32 s – 19.99 s Azure) due to three consecutive 5-second heartbeat timeouts.
+  - **Cold Evacuation**: Accounts for about 0.4–0.7 s (0.00 s – 0.70 s fallback; 0.35 s – 0.36 s Azure). The controller reschedules the VM onto a surviving healthy node and executes a fresh MicroVM cold boot.
+  - **Run 5 (0.00 s Evacuation)**: In fallback run 5, cold evacuation recorded 0.00 s because the controller background poll loop executed node failure detection and evacuation placement synchronously in the same tick (<0.005 s delta).
   - In-flight memory state, active TCP sockets, and non-persisted ephemeral filesystem changes on the failed node are lost upon evacuation.
 - **Split-Brain Fencing**:
-  When a failed node recovers, fencing is performed asynchronously by the controller's reconciliation loop: any stale Cloud Hypervisor processes matching pending tombstones or active HA VMs on other nodes are terminated via worker deletion calls. Fencing latency is tied to the reconciliation polling interval (typically 2–9 seconds post-return).
+  When a failed node recovers, fencing is performed asynchronously by the controller's reconciliation loop: any stale Cloud Hypervisor processes matching pending tombstones or active HA VMs on other nodes are terminated via worker deletion calls. Fencing latency is typically **2.0 s – 9.33 s** post-return.
+  - **Run 6 (9.33 s Fencing)**: In fallback run 6, fencing took 9.33 s post-return because Node B returned mid-cycle of the 5s polling loop (~4.5s wait), worker stop escalation took ~3.5s, and the client 1s poll interval verified 0 stale VMMs at 9.33s.
 
 ---
 
 ## 5. Boot Performance & Telemetry Variations
 
-- **Bimodal Guest SSH Readiness (7.058 s to 16.398 s)**:
-  While Cloud Hypervisor kernel initialization is ultra-fast and invariant (**327 ms to 474 ms**), full guest boot time (from API request to guest accepting SSH connections) exhibits bimodal distribution across 15 pooled benchmark runs:
-  - Fastest runs complete in **7.058 s – 8.372 s** (median: 8.372 s).
-  - Outlier runs take up to **16.398 s**.
-  - In-guest telemetry traces for slower runs show intermittent network delays during `pollinate.service` (up to 6.5 s) when attempting to fetch entropy from `entropy.ubuntu.com` through NAT before systemd reaches `multi-user.target`.
+- **Direct KVM Guest SSH Readiness (6.846 s to 11.257 s)**:
+  While Cloud Hypervisor kernel initialization is ultra-fast and invariant (**327 ms to 474 ms**), full guest boot time (from API request to guest accepting SSH connections) on direct KVM spans **6.846 s to 11.257 s** across the 20-run contention benchmark set (median: **8.460 s**; [boot_node_a_contention_20261114.txt:L46](file:///home/rajyavardhan/ps023/evidence/boot_node_a_contention_20261114.txt)).
+  - In an earlier 15-run diagnostic set ([boot_node_a_bimodality_20261114.txt:L51-L54](file:///home/rajyavardhan/ps023/evidence/boot_node_a_bimodality_20261114.txt)), outlier runs reached up to **16.398 s** (median: 8.372 s).
+  - Regarding possible causes, in-guest delay during `pollinate.service` (up to 6.5 s) attempting to fetch entropy from `entropy.ubuntu.com` through NAT was observed in 1 of 5 instrumented runs; cause not established; the host-contention test did not show an effect.
 
 ---
 

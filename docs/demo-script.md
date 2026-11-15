@@ -46,7 +46,7 @@
 
 ---
 
-## Act 1: Architecture & Resilient Dashboard (2 minutes) [All 8 views verified by user on 2026-11-15]
+## Act 1: Architecture & Resilient Dashboard (2 minutes) [Partial: 7 of 8 views verified by user on 2026-11-15]
 
 **Talking Points**:
 - PS-023 orchestrates Cloud Hypervisor MicroVMs across heterogeneous compute nodes using direct KVM virtualization.
@@ -59,7 +59,7 @@
   - **Events** [Verified by user on 2026-11-15]: Real-time cluster event stream and audit log.
   - **Images** [Verified by user on 2026-11-15]: OS catalog featuring Ubuntu 24.04 LTS, Debian 12, Alpine 3.20, and CirrOS with checksums (Debian/Alpine/CirrOS catalog entries marked "not boot-tested").
   - **Terminal** [Verified by user on 2026-11-15]: In-browser WebSocket terminal into running MicroVMs without exposing guest SSH publicly.
-  - **Failover** [Verified by user on 2026-11-15]: Dedicated cluster high-availability monitor.
+  - **Failover** [NOT VERIFIED]: Dedicated cluster high-availability monitor.
 
 ---
 
@@ -89,10 +89,10 @@ Demonstrate sub-second microVM creation and real Linux guest boot speed.
 
 1. **Show Benchmarked Latency Ranges**:
    - **Node A (Direct Host KVM)**:
-     - API Create -> Status `RUNNING`: **0.772 s – 0.997 s**
-     - Full Boot (Create -> Guest SSH Ready): **7.058 s – 16.398 s** (range across 15 pooled runs; min 7.058 s, median 8.372 s, max 16.398 s)
-     - Evidence files: `evidence/boot_node_a_bimodality_20261114.txt`, `evidence/boot_test_fallback_20261114.txt`, `evidence/boot_test_node_a_20261113.txt`
-     - Bimodality note: Kernel boot is invariant (327–474 ms); SSH ready ranges from ~7–8 s up to ~14–16 s. Hypothesized in-guest cause (observed in telemetry for 1 of 5 fresh runs) is intermittent network stalls in `pollinate.service` (up to 6.5 s) when querying `entropy.ubuntu.com` over bridge NAT; 16 s runs have no telemetry.
+     - API Create -> Status `RUNNING`: **0.772 s – 0.997 s** (Min 0.751 s in 20-run set)
+     - Full Boot (Create -> Guest SSH Ready): **6.846 s – 11.257 s** (20-run contention set pooled across conditions; median **8.460 s**; [boot_node_a_contention_20261114.txt:L46](file:///home/rajyavardhan/ps023/evidence/boot_node_a_contention_20261114.txt)).
+     - Diagnostic Set (15 runs): **7.058 s – 16.398 s** (median **8.372 s**; [boot_node_a_bimodality_20261114.txt:L51-L54](file:///home/rajyavardhan/ps023/evidence/boot_node_a_bimodality_20261114.txt)).
+     - Bimodality note: Kernel boot is invariant (**327–474 ms**). Regarding the 7–16 s guest boot variance: in-guest delay during `pollinate.service` (up to 6.5 s) when querying `entropy.ubuntu.com` over bridge NAT was observed in 1 of 5 instrumented runs; cause not established; the host-contention test did not show an effect.
    - **Node B (Nested KVM)**:
      - API Create -> Status `RUNNING`: **3.222 s – 3.994 s** (5 runs; median 3.497 s)
      - Full Boot (Create -> Guest SSH Ready): **11.775 s – 19.027 s** (5 runs; median 13.130 s)
@@ -134,9 +134,9 @@ Demonstrate sub-second microVM creation and real Linux guest boot speed.
    ```
    **What happens live**:
    - `ps023-worker` on Node B is stopped and all VMMs terminated.
-   - **T+14.88s**: Controller detects consecutive heartbeat timeouts and transitions `node-b` to `UNHEALTHY`.
-   - **T+14.92s**: Self-healing reconciler triggers auto-evacuation.
-   - `ha-demo-vm` is dynamically re-scheduled and booted on `node-a` in **0.42 seconds**!
+   - **Total Recovery**: **14.33 s – 16.39 s** (6-run fallback repeat suite; historical Azure 6-run suite: **15.35 s – 21.05 s**, recorded over SSH tunnel).
+   - **Failure Detection**: Accounts for about 14–20 s of the total (controller detects 3 consecutive missed 5-second heartbeats in **13.83 s – 15.70 s** on fallback; 15.32 s – 19.99 s on Azure).
+   - **Cold Evacuation**: Accounts for about 0.4–0.7 s of the total (surviving node schedules and spawns a fresh MicroVM in **0.00 s – 0.70 s** on fallback; 0.35 s – 0.36 s on Azure).
    - IP moves to `192.168.100.10`, status returns to `RUNNING`.
 
 3. **Restore Node B & Verify Split-Brain Fencing**:
@@ -182,7 +182,7 @@ Demonstrate sub-second microVM creation and real Linux guest boot speed.
    ```bash
    /home/rajyavardhan/ps023/.venv/bin/pytest /home/rajyavardhan/ps023-submit/src
    ```
-   - **Result**: `180 passed, 6 skipped in ~13s`.
+   - **Result**: `182 passed, 6 skipped in ~13s`.
 
 ---
 
