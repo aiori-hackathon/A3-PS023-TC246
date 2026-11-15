@@ -12,7 +12,7 @@ import urllib.request
 import subprocess
 
 CONTROLLER_URL = os.environ.get("PS023_CONTROLLER_URL", "http://127.0.0.1:8000")
-AZURE_IP = os.environ.get("NODE_B_PUBLIC_IP", "104.211.95.184")
+AZURE_IP = os.environ.get("NODE_B_PUBLIC_IP", "<NODE_B_PUBLIC_IP>")
 SSH_KEY = os.environ.get("NODE_B_SSH_KEY", os.path.expanduser("~/.ssh/id_rsa"))
 SECRETS_FILE = os.path.expanduser("~/ps023/secrets.env")
 EVIDENCE_FILE = os.path.expanduser("~/ps023/evidence/chaos_azure_repeats_20261114.txt")
