@@ -1,0 +1,76 @@
+================================================================================
+PS-023: End-to-End Live Demonstration Rehearsal
+Timestamp: 2026-11-15 14:03:06 IST
+Target: Local Fallback (node-a direct host + node-b nested KVM)
+================================================================================
+
+[STEP 1: Verify Initial Cluster State]
+  * Node node-a: status=HEALTHY vcpus=12 schedulable_mb=2086/15237 vms_running=0
+  * Node node-b: status=HEALTHY vcpus=4 schedulable_mb=2553/3931 vms_running=0
+  Result: All 2 nodes HEALTHY (took 0.008s)
+
+[STEP 2: Pluggable Scheduler Preview & Policy Comparison]
+  Preview requested: policy=best_fit, memory=512MB
+  Recommended Node: node-a (Reason: smallest sufficient memory)
+  Policy Comparisons:
+    - memory_aware: node=node-b (reason: highest available memory)
+    - first_fit: node=node-a (reason: first fit with sufficient memory)
+    - best_fit: node=node-a (reason: smallest sufficient memory)
+  Result: Scheduler preview verified (took 0.004s)
+
+[STEP 3: Insufficient Capacity Refusal (HTTP 409)]
+  Refusal status: 409 (Expected: 409)
+  Decision detail: no healthy node has enough memory
+    * node-a: skipped: not enough memory (available: 2089 MB)
+    * node-b: skipped: not enough memory (available: 2553 MB)
+  Result: Refusal handled gracefully with structured reasons (took 0.443s)
+
+[STEP 4: Deploy MicroVMs Across Nodes]
+  Created VM A: vm-664efa5f on node-a
+  Created VM B: vm-867c68e0 on node-b
+  VM A vm-664efa5f RUNNING on node-a (IP: 192.168.100.10) in 0.002s
+  VM B vm-867c68e0 RUNNING on node-b (IP: 10.77.0.10) in 0.002s
+
+[STEP 5: MicroVM Stop & Start Lifecycle Verification]
+  Stopping VM A vm-664efa5f...
+  VM A confirmed STOPPED in 0.003s
+  Starting VM A vm-664efa5f...
+  VM A confirmed RUNNING in 0.003s
+
+[STEP 6: MicroVM Deletion]
+  Deleting VM A vm-664efa5f...
+  VM A vm-664efa5f successfully deleted from cluster (took 11.343s)
+
+[STEP 7: High-Availability Failover & Evacuation (Chaos Failure)]
+  HA VM vm-eec7ebeb deployed on node-b (IP: 10.77.0.11)
+  Injecting failure on node-b (stopping worker daemon)...
+  Node-b detected UNHEALTHY in 15.138s
+  HA VM successfully evacuated to node-a in 0.507s! (Total recovery: 15.645s)
+
+[STEP 8: Node-B Restoration & Split-Brain Fencing Verification]
+  Node-b returned to HEALTHY in 5.044s
+  Split-brain fencing check: 0 stale VMMs on node-b (CLEAN)
+
+[Rehearsal Cleanup]
+  Cleaning up VM vm-867c68e0...
+  Cleaning up VM vm-eec7ebeb...
+  All rehearsal test VMs cleaned up.
+
+================================================================================
+REHEARSAL EXECUTION SUMMARY
+================================================================================
+  step1_cluster_check_s         : 0.008 s
+  step2_scheduler_preview_s     : 0.004 s
+  step3_refusal_check_s         : 0.443 s
+  step4_deploy_vms_s            : 7.66 s
+  vm_a_boot_s                   : 0.002 s
+  vm_b_boot_s                   : 0.002 s
+  step5_stop_start_s            : 30.714 s
+  step6_delete_s                : 11.343 s
+  ha_detect_s                   : 15.138 s
+  ha_evac_s                     : 0.507 s
+  ha_total_s                    : 15.645 s
+  node_b_return_s               : 5.044 s
+  total_rehearsal_duration_s    : 91.53 s
+
+OVERALL RESULT: SUCCESS (Full demo flow completed with zero errors in 91.53s)

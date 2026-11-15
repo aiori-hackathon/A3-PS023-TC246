@@ -1,0 +1,37 @@
+================================================================================
+PS-023: Controller Restart Reconciliation Test
+Date: 2026-11-15 13:55:11 IST
+================================================================================
+
+[1/5 Initial Cluster Health]
+  * Node node-a: status=HEALTHY schedulable_mb=2010 running_vms=0
+  * Node node-b: status=HEALTHY schedulable_mb=2551 running_vms=0
+
+[2/5 Deploying Test VMs across nodes]
+  Created VM on node-a: ID vm-919b2a1a (name: reconcile-test-a)
+  Created VM on node-b: ID vm-766b96db (name: reconcile-test-b)
+  VM A vm-919b2a1a status: RUNNING on node-a (IP: 192.168.100.10)
+  VM B vm-766b96db status: RUNNING on node-b (IP: 10.77.0.10)
+
+[3/5 Pre-Restart VM Snapshot (2 VMs total)]
+  * vm-919b2a1a (reconcile-test-a): node=node-a status=RUNNING ip=192.168.100.10
+  * vm-766b96db (reconcile-test-b): node=node-b status=RUNNING ip=10.77.0.10
+
+[4/5 Restarting Controller Service ONLY...]
+  Controller stopped: confirmed down=True
+  Controller restarted successfully in 2.06s (health: ok)
+
+[5/5 Post-Restart Reconciliation Verification]
+  * Node node-a: status=HEALTHY schedulable_mb=1836 running_vms=1
+  * Node node-b: status=HEALTHY schedulable_mb=2469 running_vms=1
+
+  Post-Restart VMs Count: 2 (Expected: 2)
+  * vm-919b2a1a (reconcile-test-a): node=node-a status=RUNNING ip=192.168.100.10
+  * vm-766b96db (reconcile-test-b): node=node-b status=RUNNING ip=10.77.0.10
+
+RESULT: Reconciliation SUCCESS - Both VMs intact, RUNNING on original nodes, 0 duplicates, 0 orphans.
+
+[Cleanup]
+  Deleting test VM vm-919b2a1a...
+  Deleting test VM vm-766b96db...
+  Cleanup complete.

@@ -1,8 +1,8 @@
 # PS-023: Live Demonstration Runbook & Script
 **Duration**: ~10–12 minutes  
 **Target Environments**: 
-- **Local Fallback Mode (Default / Tested Today)**: Node A (Host Fedora Linux) + Node B (Nested KVM VM on `192.168.100.17`). Azure VM `ps023-node-b` stays deallocated.
-- **Azure Hybrid Mode**: Laptop (Node A) + Azure Standard_D2s_v4 (Node B on `10.100.0.2` via WireGuard / SSH Tunnel).
+- **Local Fallback Mode (Primary Demo / Tested Live)**: Node A (Host Fedora Linux direct KVM) + Node B (Nested KVM VM on `192.168.100.17`). Azure VM `ps023-node-b` stays deallocated.
+- **Azure Hybrid Mode (Recorded Reference Runs from 13–14 Nov 2026)**: Laptop (Node A) + Azure Standard_D2s_v4 (Node B on `10.100.0.2`). Transport modes evaluated: `ssh-tunnel` (recorded 13–14 Nov); `wireguard` verified on a dedicated mobile hotspot only (venue hostel Wi-Fi blocks UDP 51820).
 
 ---
 
@@ -46,7 +46,7 @@
 
 ---
 
-## Act 1: Architecture & Resilient Dashboard (2 minutes) [Partial: 5 of 8 views verified by user on 2026-11-15]
+## Act 1: Architecture & Resilient Dashboard (2 minutes) [Partial: 7 of 8 views verified by user on 2026-11-15]
 
 **Talking Points**:
 - PS-023 orchestrates Cloud Hypervisor MicroVMs across heterogeneous compute nodes using direct KVM virtualization.
@@ -57,8 +57,8 @@
   - **VMs** [Verified by user on 2026-11-15]: Deployed guests, IP assignments, direct console actions.
   - **Decisions** [Verified by user on 2026-11-15]: Real-time structured placement reasoning log.
   - **Events** [Verified by user on 2026-11-15]: Real-time cluster event stream and audit log.
-  - **Images** [NOT VERIFIED]: OS catalog featuring Ubuntu 24.04 LTS, Debian 12, Alpine 3.20, and CirrOS with checksums (Debian/Alpine/CirrOS catalog entries marked "not boot-tested").
-  - **Terminal** [NOT VERIFIED]: In-browser WebSocket terminal into running MicroVMs without exposing guest SSH publicly.
+  - **Images** [Verified by user on 2026-11-15]: OS catalog featuring Ubuntu 24.04 LTS, Debian 12, Alpine 3.20, and CirrOS with checksums (Debian/Alpine/CirrOS catalog entries marked "not boot-tested").
+  - **Terminal** [Verified by user on 2026-11-15]: In-browser WebSocket terminal into running MicroVMs without exposing guest SSH publicly.
   - **Failover** [NOT VERIFIED]: Dedicated cluster high-availability monitor.
 
 ---

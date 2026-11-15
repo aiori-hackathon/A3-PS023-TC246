@@ -1,76 +1,42 @@
-# Deployment and restart
+# PS-023: Deployment Runbook & Environment Guide
 
-This describes how the runtime is started on the development laptop. The
-scripts use the folder `~/ps023` (the repository copy under `src/` is the same
-code, but `bring-up.sh` runs from `~/ps023`).
+## 1. Deployment Environments
 
-Not covered here: building the base VM image, the node B kernel and node B's
-disk. Those are one-time setup steps.
+### A. Primary Demo Environment: Local Fallback Cluster
+- **Controller & Node A**: Host machine (Fedora Linux, kernel 6.x, direct KVM).
+- **Node B**: Nested KVM guest (`192.168.100.17`) launched via `cloud-hypervisor` with nested virtualization enabled (`--cpus boot=4,kvm_hyperv=off`).
+- **Network Topology**:
+  - Host bridge: `br-ps023` (`192.168.100.1/24`).
+  - Node A MicroVMs: `192.168.100.10+`.
+  - Node B inner subnet: `10.77.0.0/24` routed via `ip route add 10.77.0.0/24 via 192.168.100.17 dev br-ps023`.
 
-## Prerequisites
+### B. Azure Hybrid Cloud Deployment (Historical Runs: 13–14 Nov 2026)
+- **Node B VM**: `ps023-node-b` (Azure `Standard_D2s_v4`, Central India).
+- **Transport Configurations**:
+  - `ssh-tunnel`: Local port forward `8002 -> 127.0.0.1:8002` over SSH (`ssh -L 8002:127.0.0.1:8002`).
+  - `wireguard`: Point-to-point WireGuard tunnel (`wg0`, `10.100.0.1` host <-> `10.100.0.2` Azure VM). Verified over mobile hotspot; venue Wi-Fi blocks UDP 51820.
 
-* Linux with `/dev/kvm`; Cloud Hypervisor v54.0.0 on the host and a static
-  `cloud-hypervisor` binary inside node B.
-* A Python virtual environment at `~/ps023/.venv` with `src/requirements.txt`
-  installed.
-* `sudo`, `ip`, `iptables`, `curl`, `sshpass` and `python3`. `firewall-cmd` is
-  used if present.
-* `~/ps023/secrets.env` (mode 600, never committed) defining
-  `PS023_VM_PASSWORD`, `PS023_API_TOKEN`, `PS023_TOKEN_NODE_A` and
-  `PS023_TOKEN_NODE_B`. The script refuses to run if one is empty.
-* `~/ps023/outer/` with `start-outer.sh`, `inner-net.sh` and `start-worker.sh`
-  (copies are in `src/scripts/`).
+---
 
-## Start everything (also after a reboot)
+## 2. Bring-Up Procedure (Local Fallback)
 
-```
-bash ~/ps023/with-secrets.sh bash ~/ps023/bring-up.sh
-```
+1. **Verify Host Prerequisites**:
+   - Primed sudo credentials (`sudo -v`).
+   - Cloud Hypervisor binary present at `/usr/local/bin/cloud-hypervisor`.
+   - Kernel images at `/var/lib/ps023/images/vmlinux.bin`.
 
-It asks for the sudo password and takes a few minutes when node B has to boot.
-It is safe to run again. It ends with `READY` when both nodes are `HEALTHY`.
+2. **Execute Automated Bring-Up**:
+   ```bash
+   bash ~/ps023/with-secrets.sh bash ~/ps023/bring-up.sh
+   ```
+   **Expected Output**:
+   - `=== 1. host network`: bridge `br-ps023` and 8 TAP devices ready.
+   - `=== 2. node-b setup`: nested VM booted and responsive.
+   - `=== 3. node-b inner network and worker`: worker B OK.
+   - `=== 4. route to inner network`: `10.77.0.0/24 via 192.168.100.17`.
+   - `=== 5. worker A and controller on host`: worker A OK, controller OK.
+   - `=== 6. cluster state`: both nodes `HEALTHY`. `READY.`
 
-| Stage | What it does |
-|---|---|
-| 1. host network | Creates bridge `br-ps023` (192.168.100.1/24) and TAP devices `tapvm0`-`tapvm7`; enables IP forwarding; adds firewall rules (including Docker's `DOCKER-USER` chain, whose default drop otherwise breaks VM NAT). |
-| 2. node B | Starts the nested VM (192.168.100.17, TAP `tapvm7`) and waits for SSH. |
-| 3. node B inner network and worker | Recreates node B's inner bridge `br-inner` (10.77.0.1/24) and TAPs `tapvm0`-`tapvm3` (they are lost whenever node B restarts), then starts worker B on port 8002. |
-| 4. route | Adds `10.77.0.0/24 via 192.168.100.17` on the host so the host can reach VMs running inside node B. |
-| 5. worker A and controller | Stops and restarts worker A (127.0.0.1:8001, slots 0-3) and the controller (127.0.0.1:8000). |
-| 6. cluster state | Prints each node's status and memory and the number of host VMM processes (1 expected: node B). |
-
-Running it again restarts worker A and the controller. Running VMs are not
-stopped, because each VMM runs in its own session; the controller re-syncs
-their state afterwards.
-
-## Stop
-
-```
-kill (pgrep -f 'uvicorn main:app.*--port 8001')   # fish shell
-kill (pgrep -f 'uvicorn main:app.*--port 8000')
-```
-
-VMs keep running; the controller marks them `UNKNOWN` until it can reach their
-worker again.
-
-## Logs
-
-`~/ps023/logs/worker-a.log` and `~/ps023/logs/controller.log` on the host;
-worker B's log is `~/worker.log` inside node B. Each VM's folder holds a
-`vmm.log`.
-
-## Verified
-
-* Warm re-run of `bring-up.sh` with node B already running: several times.
-* Cold start after a reboot (everything down): once; the log was kept.
-* Nodes were `HEALTHY` and a VM could be created, stopped, started and deleted
-  afterwards.
-
-## Common problems
-
-| Symptom | Likely cause |
-|---|---|
-| `Connection refused` on port 8000 | The controller is not running; run `bring-up.sh`. |
-| `worker B not answering` | Look at the end of `~/worker.log` inside node B. |
-| Warning that `wlp3s0` is not found | The Wi-Fi interface has another name (check `ip -br addr`). The script only warns. |
-| A create is refused with `tapvm0 missing` | Node B's inner TAPs are gone (node B restarted); run `bring-up.sh`. |
+3. **Verify Dashboard Access**:
+   - Open browser at `http://127.0.0.1:8000/dashboard/`.
+   - Connect using `PS023_API_TOKEN`.

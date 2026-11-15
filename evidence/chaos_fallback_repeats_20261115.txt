@@ -1,0 +1,195 @@
+================================================================================
+PS-023: Fallback Chaos Repeats Benchmark (6 Runs: 3 worker + 3 worker-preserve-vms)
+Date: 2026-11-15 13:48:55 IST
+Environment: Fallback Mode (Nested Node B on 192.168.100.17)
+================================================================================
+
+--------------------------------------------------------------------------------
+RUN 1/6: Mode 'worker' (Repeat #1)
+Timestamp: 2026-11-15 13:48:55 IST
+--------------------------------------------------------------------------------
+  * Node node-a: status=HEALTHY schedulable_mb=1866
+  * Node node-b: status=HEALTHY schedulable_mb=2538
+
+[1/5 Deploying HA VM 'ha-fallback-worker-r1' on node-b...]
+  Created VM ID: vm-353b6d89 (node: node-b)
+  VM vm-353b6d89 confirmed RUNNING on node-b (IP: 10.77.0.10) in 0.003s
+
+[2/5 Injecting Chaos Failure (Mode: worker)...]
+  [2026-11-15 13:49:01] Node B worker stopped and all cloud-hypervisors killed (VMs gone).
+
+[3/5 Detection: Waiting for controller to mark node-b UNHEALTHY...]
+  [2026-11-15 13:49:15] Controller marked node-b as UNHEALTHY (detection delay: 14.61s)
+
+[4/5 Self-Healing: Monitoring auto-evacuation to node-a...]
+  [2026-11-15 13:49:16] VM vm-353b6d89 successfully evacuated to node-a!
+  Evacuated IP: 192.168.100.10 | Status: RUNNING
+  Detection: 14.61s | Cold Evacuation: 0.51s | Total Recovery: 15.12s
+
+[5/5 Restoration & Fencing Verification (Mode: worker)...]
+  [2026-11-15 13:49:21] Node B returned to HEALTHY in 5.042s!
+  Fencing verified: 0 stale VMMs present on node-b (CLEAN (0 stale VMMs)).
+
+[Cleaning up VM vm-353b6d89...]
+  Cleanup complete.
+
+--------------------------------------------------------------------------------
+RUN 2/6: Mode 'worker' (Repeat #2)
+Timestamp: 2026-11-15 13:49:34 IST
+--------------------------------------------------------------------------------
+  * Node node-a: status=HEALTHY schedulable_mb=1964
+  * Node node-b: status=HEALTHY schedulable_mb=2528
+
+[1/5 Deploying HA VM 'ha-fallback-worker-r2' on node-b...]
+  Created VM ID: vm-4085ce15 (node: node-b)
+  VM vm-4085ce15 confirmed RUNNING on node-b (IP: 10.77.0.10) in 0.003s
+
+[2/5 Injecting Chaos Failure (Mode: worker)...]
+  [2026-11-15 13:49:40] Node B worker stopped and all cloud-hypervisors killed (VMs gone).
+
+[3/5 Detection: Waiting for controller to mark node-b UNHEALTHY...]
+  [2026-11-15 13:49:55] Controller marked node-b as UNHEALTHY (detection delay: 14.79s)
+
+[4/5 Self-Healing: Monitoring auto-evacuation to node-a...]
+  [2026-11-15 13:49:55] VM vm-4085ce15 successfully evacuated to node-a!
+  Evacuated IP: 192.168.100.10 | Status: RUNNING
+  Detection: 14.79s | Cold Evacuation: 0.51s | Total Recovery: 15.3s
+
+[5/5 Restoration & Fencing Verification (Mode: worker)...]
+  [2026-11-15 13:50:00] Node B returned to HEALTHY in 4.535s!
+  Fencing verified: 0 stale VMMs present on node-b (CLEAN (0 stale VMMs)).
+
+[Cleaning up VM vm-4085ce15...]
+  Cleanup complete.
+
+--------------------------------------------------------------------------------
+RUN 3/6: Mode 'worker' (Repeat #3)
+Timestamp: 2026-11-15 13:50:13 IST
+--------------------------------------------------------------------------------
+  * Node node-a: status=HEALTHY schedulable_mb=1724
+  * Node node-b: status=HEALTHY schedulable_mb=2491
+
+[1/5 Deploying HA VM 'ha-fallback-worker-r3' on node-b...]
+  Created VM ID: vm-7ffb22f1 (node: node-b)
+  VM vm-7ffb22f1 confirmed RUNNING on node-b (IP: 10.77.0.10) in 0.003s
+
+[2/5 Injecting Chaos Failure (Mode: worker)...]
+  [2026-11-15 13:50:20] Node B worker stopped and all cloud-hypervisors killed (VMs gone).
+
+[3/5 Detection: Waiting for controller to mark node-b UNHEALTHY...]
+  [2026-11-15 13:50:34] Controller marked node-b as UNHEALTHY (detection delay: 14.2s)
+
+[4/5 Self-Healing: Monitoring auto-evacuation to node-a...]
+  [2026-11-15 13:50:34] VM vm-7ffb22f1 successfully evacuated to node-a!
+  Evacuated IP: 192.168.100.10 | Status: RUNNING
+  Detection: 14.2s | Cold Evacuation: 0.51s | Total Recovery: 14.71s
+
+[5/5 Restoration & Fencing Verification (Mode: worker)...]
+  [2026-11-15 13:50:40] Node B returned to HEALTHY in 5.046s!
+  Fencing verified: 0 stale VMMs present on node-b (CLEAN (0 stale VMMs)).
+
+[Cleaning up VM vm-7ffb22f1...]
+  Cleanup complete.
+
+--------------------------------------------------------------------------------
+RUN 4/6: Mode 'worker-preserve-vms' (Repeat #1)
+Timestamp: 2026-11-15 13:50:53 IST
+--------------------------------------------------------------------------------
+  * Node node-a: status=HEALTHY schedulable_mb=1982
+  * Node node-b: status=HEALTHY schedulable_mb=2525
+
+[1/5 Deploying HA VM 'ha-fallback-worker-r1' on node-b...]
+  Created VM ID: vm-3d4c86bd (node: node-b)
+  VM vm-3d4c86bd confirmed RUNNING on node-b (IP: 10.77.0.10) in 0.003s
+
+[2/5 Injecting Chaos Failure (Mode: worker-preserve-vms)...]
+  [2026-11-15 13:50:59] Node B worker stopped. Cloud-hypervisor processes remain running.
+
+[3/5 Detection: Waiting for controller to mark node-b UNHEALTHY...]
+  [2026-11-15 13:51:13] Controller marked node-b as UNHEALTHY (detection delay: 13.83s)
+
+[4/5 Self-Healing: Monitoring auto-evacuation to node-a...]
+  [2026-11-15 13:51:14] VM vm-3d4c86bd successfully evacuated to node-a!
+  Evacuated IP: 192.168.100.10 | Status: RUNNING
+  Detection: 13.83s | Cold Evacuation: 0.51s | Total Recovery: 14.33s
+
+[5/5 Restoration & Fencing Verification (Mode: worker-preserve-vms)...]
+  [2026-11-15 13:51:19] Node B returned to HEALTHY in 5.071s!
+  Monitoring fencing of stale VMM on node-b...
+  Stale VMM successfully killed by fencing pass in 2.0s post-return!
+
+[Cleaning up VM vm-3d4c86bd...]
+  Cleanup complete.
+
+--------------------------------------------------------------------------------
+RUN 5/6: Mode 'worker-preserve-vms' (Repeat #2)
+Timestamp: 2026-11-15 13:51:28 IST
+--------------------------------------------------------------------------------
+  * Node node-a: status=HEALTHY schedulable_mb=1934
+  * Node node-b: status=HEALTHY schedulable_mb=2563
+
+[1/5 Deploying HA VM 'ha-fallback-worker-r2' on node-b...]
+  Created VM ID: vm-121f6286 (node: node-b)
+  VM vm-121f6286 confirmed RUNNING on node-b (IP: 10.77.0.10) in 0.002s
+
+[2/5 Injecting Chaos Failure (Mode: worker-preserve-vms)...]
+  [2026-11-15 13:51:34] Node B worker stopped. Cloud-hypervisor processes remain running.
+
+[3/5 Detection: Waiting for controller to mark node-b UNHEALTHY...]
+  [2026-11-15 13:51:49] Controller marked node-b as UNHEALTHY (detection delay: 14.74s)
+
+[4/5 Self-Healing: Monitoring auto-evacuation to node-a...]
+  [2026-11-15 13:51:49] VM vm-121f6286 successfully evacuated to node-a!
+  Evacuated IP: 192.168.100.10 | Status: RUNNING
+  Detection: 14.74s | Cold Evacuation: 0.0s | Total Recovery: 14.74s
+
+[5/5 Restoration & Fencing Verification (Mode: worker-preserve-vms)...]
+  [2026-11-15 13:51:54] Node B returned to HEALTHY in 5.039s!
+  Monitoring fencing of stale VMM on node-b...
+  Stale VMM successfully killed by fencing pass in 6.75s post-return!
+
+[Cleaning up VM vm-121f6286...]
+  Cleanup complete.
+
+--------------------------------------------------------------------------------
+RUN 6/6: Mode 'worker-preserve-vms' (Repeat #3)
+Timestamp: 2026-11-15 13:52:12 IST
+--------------------------------------------------------------------------------
+  * Node node-a: status=HEALTHY schedulable_mb=1509
+  * Node node-b: status=HEALTHY schedulable_mb=2520
+
+[1/5 Deploying HA VM 'ha-fallback-worker-r3' on node-b...]
+  Created VM ID: vm-6e20a94d (node: node-b)
+  VM vm-6e20a94d confirmed RUNNING on node-b (IP: 10.77.0.10) in 0.002s
+
+[2/5 Injecting Chaos Failure (Mode: worker-preserve-vms)...]
+  [2026-11-15 13:52:19] Node B worker stopped. Cloud-hypervisor processes remain running.
+
+[3/5 Detection: Waiting for controller to mark node-b UNHEALTHY...]
+  [2026-11-15 13:52:35] Controller marked node-b as UNHEALTHY (detection delay: 15.7s)
+
+[4/5 Self-Healing: Monitoring auto-evacuation to node-a...]
+  [2026-11-15 13:52:35] VM vm-6e20a94d successfully evacuated to node-a!
+  Evacuated IP: 192.168.100.10 | Status: RUNNING
+  Detection: 15.7s | Cold Evacuation: 0.7s | Total Recovery: 16.39s
+
+[5/5 Restoration & Fencing Verification (Mode: worker-preserve-vms)...]
+  [2026-11-15 13:52:41] Node B returned to HEALTHY in 4.532s!
+  Monitoring fencing of stale VMM on node-b...
+  Stale VMM successfully killed by fencing pass in 9.33s post-return!
+
+[Cleaning up VM vm-6e20a94d...]
+  Cleanup complete.
+
+================================================================================
+PS-023: Fallback Chaos Repeats - Summary Results
+================================================================================
+Run   Mode                   VM ID         Detect (s)   Evac (s)   Total (s)   Fencing Outcome
+--------------------------------------------------------------------------------
+1     worker                 vm-353b6d89   14.61        0.51       15.12       CLEAN (0 stale VMMs)
+2     worker                 vm-4085ce15   14.79        0.51       15.30       CLEAN (0 stale VMMs)
+3     worker                 vm-7ffb22f1   14.20        0.51       14.71       CLEAN (0 stale VMMs)
+4     worker-preserve-vms    vm-3d4c86bd   13.83        0.51       14.33       KILLED (2.0s post-return)
+5     worker-preserve-vms    vm-121f6286   14.74        0.00       14.74       KILLED (6.75s post-return)
+6     worker-preserve-vms    vm-6e20a94d   15.70        0.70       16.39       KILLED (9.33s post-return)
+================================================================================
