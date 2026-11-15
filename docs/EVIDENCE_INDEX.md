@@ -103,3 +103,15 @@ Source scripts: `scripts/demo_rehearsal.py` (executing all 8 demo flow acts sequ
 | **Run 1** | 2026-11-15 13:59:17 IST | 86.49 s | SUCCESS (All 8 steps passed, 0 errors) | [demo_rehearsal_run1_20261115.txt](file:///home/rajyavardhan/ps023/evidence/demo_rehearsal_run1_20261115.txt) | L60–L76 |
 | **Run 2** | 2026-11-15 14:02:45 IST | 91.76 s | SUCCESS (All 8 steps passed, 0 errors) | [demo_rehearsal_run2_20261115.txt](file:///home/rajyavardhan/ps023/evidence/demo_rehearsal_run2_20261115.txt) | L60–L76 |
 | **Run 3** | 2026-11-15 14:05:30 IST | 91.53 s | SUCCESS (All 8 steps passed, 0 errors) | [demo_rehearsal_run3_20261115.txt](file:///home/rajyavardhan/ps023/evidence/demo_rehearsal_run3_20261115.txt) | L60–L76 |
+
+---
+
+## 8. Timestamped Reconcile & Failover Telemetry
+
+| Measurement | Recorded Value | Evidence File | Line(s) | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **Detection Delay** | 13.18 s | [failover_timestamped_20261115.txt](file:///home/rajyavardhan/ps023/evidence/failover_timestamped_20261115.txt) | L10 | **VERIFIED** |
+| **Cold Evacuation Delay** | 1.01 s | [failover_timestamped_20261115.txt](file:///home/rajyavardhan/ps023/evidence/failover_timestamped_20261115.txt) | L11 | **VERIFIED** |
+| **Total Recovery Time** | 14.19 s | [failover_timestamped_20261115.txt](file:///home/rajyavardhan/ps023/evidence/failover_timestamped_20261115.txt) | L12 | **VERIFIED** |
+| **Tombstone Fencing on Return** | Logged at 23:24:12 IST (sub-second post-return) | [failover_timestamped_20261115.txt](file:///home/rajyavardhan/ps023/evidence/failover_timestamped_20261115.txt) | L17 | **VERIFIED** |
+

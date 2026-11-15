@@ -84,11 +84,11 @@ If any live technical dependency fluctuates, seamlessly transition down the ladd
    bash ~/ps023/scripts/make_known_good_backup.sh
    ```
 
-2. **Rollback Controller & Worker Python Code from KNOWN_GOOD**:
+2. **Rollback Controller & Worker Python Code from KNOWN_GOOD (`known_good_20261115_232835`)**:
    ```bash
-   # Replace KNOWN_GOOD with the desired backup directory name (e.g. known_good_20261115_230520)
-   rsync -ac "$HOME/ps023_backups/KNOWN_GOOD/controller/" "$HOME/ps023/controller/"
-   rsync -ac "$HOME/ps023_backups/KNOWN_GOOD/worker/" "$HOME/ps023/worker/"
+   # Latest verified known-good backup: /home/rajyavardhan/ps023_backups/known_good_20261115_232835
+   rsync -ac "$HOME/ps023_backups/known_good_20261115_232835/controller/" "$HOME/ps023/controller/"
+   rsync -ac "$HOME/ps023_backups/known_good_20261115_232835/worker/" "$HOME/ps023/worker/"
    ```
 3. **Restore Nested Node B Disk Image from Verified Backup**:
    ```bash
