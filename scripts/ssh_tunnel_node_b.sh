@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-AZURE_IP="${1:-104.211.95.184}"
+AZURE_IP="${1:-<NODE_B_PUBLIC_IP>}"
 while true; do
     ssh -o ExitOnForwardFailure=yes \
         -o ServerAliveInterval=15 \

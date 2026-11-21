@@ -43,6 +43,7 @@ vm_part2.txt
 
 # hackathon reference documents (add back deliberately if allowed)
 *.pdf
+!docs/deck/*.pdf
 *.db
 outer/seed/
 outer/*.log

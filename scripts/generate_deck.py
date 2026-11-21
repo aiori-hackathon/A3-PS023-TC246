@@ -23,8 +23,10 @@ from pptx.enum.shapes import MSO_SHAPE
 OUTPUT_DIR = "/home/rajyavardhan/ps023/docs/deck"
 IMAGES_DIR = os.path.join(OUTPUT_DIR, "images")
 SLIDES_DIR = os.path.join(OUTPUT_DIR, "slides")
-PPTX_PATH = os.path.join(OUTPUT_DIR, "ps023_draft.pptx")
-PDF_PATH = os.path.join(OUTPUT_DIR, "ps023_draft.pdf")
+PPTX_DRAFT_PATH = os.path.join(OUTPUT_DIR, "ps023_draft.pptx")
+PPTX_FINAL_PATH = os.path.join(OUTPUT_DIR, "ps023_final.pptx")
+PDF_FINAL_PATH = os.path.join(OUTPUT_DIR, "ps023_final.pdf")
+PDF_DRAFT_PATH = os.path.join(OUTPUT_DIR, "ps023_draft.pdf")
 
 os.makedirs(IMAGES_DIR, exist_ok=True)
 os.makedirs(SLIDES_DIR, exist_ok=True)
@@ -216,8 +218,8 @@ def build_presentation():
 
     tb_sub = s1.shapes.add_textbox(Inches(1.2), Inches(2.6), Inches(10.9), Inches(1.2))
     p = tb_sub.text_frame.paragraphs[0]
-    p.text = "Automated HA Failover (Total Recovery 14.19s–16.39s, Detection 13.18s–15.70s, Cold Evacuation 0.00s–1.01s),\nCgroups v2 Defensive Isolation (128MB Overhead, 256 PIDs) & Pluggable Policy Scheduling"
-    p.font.size = Pt(16.5)
+    p.text = "Automated HA Failover (Live: Total Recovery 14.19s, Detection 13.18s, Cold Evacuation 1.01s; figures from different observation points and do not sum; Fallback repeats 14.33s–16.39s),\nCgroups v2 Defensive Isolation (128MB Overhead, 256 PIDs) & Pluggable Policy Scheduling"
+    p.font.size = Pt(15.5)
     p.font.color.rgb = c_green
 
     tb_meta = s1.shapes.add_textbox(Inches(1.2), Inches(4.5), Inches(10.9), Inches(1.5))
@@ -253,7 +255,7 @@ def build_presentation():
         ("Goal 1: Direct Kernel Boot & Lightweight Paravirtualization",
          "Leverage Rust-based Cloud Hypervisor with modern virtio devices and direct uncompressed kernel boot (vmlinux.bin), eliminating BIOS overhead and booting to userspace in seconds (direct kernel init: 327–474 ms)."),
         ("Goal 2: Deterministic HA Failover Leading with Total Recovery",
-         "Implement autonomous heartbeat lease monitoring (5s ticks) and cold evacuation on surviving nodes: achieving 14.19s–16.39s total recovery (detection: 13.18s–15.70s; cold evacuation: 0.00s–1.01s)."),
+         "Implement autonomous heartbeat lease monitoring (5s ticks) and cold evacuation on surviving nodes: achieving 14.19s live total recovery (detection: 13.18s; cold evacuation: 1.01s; note: the three figures come from different observation points and do not sum) and 14.33s–16.39s across fallback repeats."),
         ("Goal 3: Defense-in-Depth Cgroups v2 Isolation",
          "Enforce strict single-hierarchy cgroup v2 slices per microVM (memory.max = RAM + 128MB overhead, cpu.max = 1.25x CFS quota, pids.max = 256), ensuring in-guest OOM kills never impact the physical host."),
         ("Goal 4: Pluggable Scheduling & Zero-Orphan Reconciler",
@@ -277,7 +279,7 @@ def build_presentation():
     s3 = prs.slides.add_slide(blank_layout)
     add_header(s3, "System Architecture: Heterogeneous Two-Node Cluster")
     arch_img = render_arch_diagram()
-    s3.shapes.add_picture(arch_img, Inches(1.2), Inches(1.4), width=Inches(10.9))
+    s3.shapes.add_picture(arch_img, Inches(1.5), Inches(1.35), width=Inches(10.3))
     add_footnote(s3, "docs/architecture.md, scripts/bring-up.sh, docs/nested_node_b_setup.md")
 
     # ==========================================================================
@@ -326,8 +328,8 @@ def build_presentation():
     tf_s6.word_wrap = True
 
     pts_s6 = [
-        ("Leading with Total Recovery (14.19 s – 16.39 s)",
-         "Total failover recovery from failure injection to healthy running state on surviving node spans 14.19s – 16.39s (today's live test: 14.19s; fallback 6-run repeats: 14.33s – 16.39s; historical Azure runs: 15.35s – 21.05s)."),
+        ("Leading with Total Recovery (Live: 14.19 s; Repeats: 14.33 s – 16.39 s)",
+         "Total failover recovery from failure injection to healthy running state on surviving node: verified live failover achieved 14.19s total recovery (13.18s detection, 1.01s evacuation; note: the three figures come from different observation points and do not sum). Fallback 6-run repeats span 14.33s – 16.39s; historical Azure runs span 15.35s – 21.05s."),
         ("Failure Detection Latency (13.18 s – 15.70 s)",
          "Controller polls worker heartbeats every 5s; node is marked UNHEALTHY after missing 3 consecutive heartbeats (13.18s in live test; 13.83s–15.70s across fallback repeats; 14.84s–20.35s in Azure historical over SSH tunnel)."),
         ("Cold Evacuation Latency (0.00 s – 1.01 s)",
@@ -374,11 +376,11 @@ def build_presentation():
             p.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
 
     tbl_data = [
-        ("VMM Memory Overhead", "256 MB – 1024 MB", "128 MB fixed overhead (cgroups enforced)", "worker/cgroup_manager.py:L23, stress:L10"),
+        ("VMM Memory Overhead", "256 MB – 1024 MB", "128 MB fixed overhead (overhead is 128 MB; 256 is pids.max)", "worker/cgroup_manager.py:L23, stress:L10"),
         ("Direct Kernel Boot Time", "2.5 s – 8.0 s", "327 ms – 474 ms (Direct KVM kernel init)", "boot_node_a_bimodality_20261114.txt:L33-L46"),
         ("API Create -> Running", "5.0 s – 15.0 s", "0.751 s – 0.997 s (Direct KVM API latency)", "boot_node_a_contention_20261114.txt:L20"),
-        ("Node A Full Boot (SSH)", "15.0 s – 60.0 s", "6.846 s – 11.257 s (contention, 20 runs)\n7.058 s – 16.398 s (diagnostic, 15 runs)", "contention_20261114.txt:L45-L48\nbimodality_20261114.txt:L16-L27"),
-        ("Total Failover Recovery", "45 s – 180 s", "14.19 s (today's live fallback run)\n14.33 s – 16.39 s (fallback repeats, 6 runs)\n15.35 s – 21.05 s (recorded 13-14 Nov, ssh-tunnel)", "failover_timestamped_20261115.txt:L12\nchaos_fallback_repeats_20261115.txt:L190\nchaos_azure_repeats_20261114.txt:L402"),
+        ("Node A Full Boot (SSH)", "15.0 s – 60.0 s", "6.846 s – 11.257 s (contention set, n=20, med 8.460 s)\n7.058 s – 16.398 s (diagnostic set, n=15, med 8.372 s)", "contention_20261114.txt:L45-L48\nbimodality_20261114.txt:L49-L55"),
+        ("Total Failover Recovery", "45 s – 180 s", "14.19 s (live: 13.18s det, 1.01s evac; do not sum)\n14.33 s – 16.39 s (fallback repeats, n=6)\n15.35 s – 21.05 s (recorded 13-14 Nov, ssh-tunnel)", "failover_timestamped_20261115.txt:L10-L12\nchaos_fallback_repeats_20261115.txt:L190\nchaos_azure_repeats_20261114.txt:L402"),
         ("Cold Evacuation Latency", "10 s – 45 s", "1.01 s (live run) | 0.00 s – 0.70 s (fallback)", "failover_timestamped_20261115.txt:L11"),
         ("Controller Restart Sync", "Manual reboot", "2.06 s (zero orphans, 2/2 VMs preserved)", "controller_restart_20261115.txt:L20-L32"),
     ]
@@ -500,7 +502,7 @@ def build_presentation():
 
     pts_s11 = [
         ("Deterministic High Availability Leading with Total Recovery",
-         "Autonomous detection and cold evacuation reliably recovers stateful HA workloads in 14.19 s – 16.39 s (cold evacuation in 0.00 s – 1.01 s) with zero-leak tombstone split-brain fencing on worker return."),
+         "Autonomous detection and cold evacuation reliably recovers stateful HA workloads: 14.19 s live total recovery (13.18 s detection, 1.01 s cold evacuation; note: figures from different observation points and do not sum) and 14.33 s – 16.39 s fallback repeats (0.00 s – 1.01 s cold evacuation), with zero-leak tombstone split-brain fencing on worker return."),
         ("Guaranteed Defensive Host Containment",
          "Cgroups v2 resource slices (128 MB overhead, 256 PIDs, 1.25x CPU quota) successfully isolate guest workloads, keeping physical host memory and hypervisor processes fully protected during guest memory exhaustion (oom_kill = 0)."),
         ("Resilient Zero-Orphan Control Plane",
@@ -534,10 +536,10 @@ def build_presentation():
          "Kernel initialization is invariantly fast (327–474 ms). Full SSH readiness on direct KVM spans 6.846 s – 11.257 s across the 20-run contention set (median 8.460 s). An earlier 15-run diagnostic set reached 7.058 s – 16.398 s (median 8.372 s). In-guest delay during pollinate.service was observed in 1 of 5 instrumented runs; cause not established; the host-contention test did not show an effect.",
          "boot_node_a_contention_20261114.txt:L45-L48, boot_node_a_bimodality_20261114.txt:L16-L27"),
         ("Q2: What prevents split-brain execution when a failed node returns?",
-         "Total recovery takes 14.19s – 16.39s (detection: 13.18s–15.70s; cold evacuation: 0.00s–1.01s). When the failed node returns, the controller matches tombstones in SQLite against the worker's active VM list and executes delete_vm() to fence stale duplicates (fenced in 2.0s–9.33s). Historical Run 6 took 9.33s (wait/shutdown split not instrumented); live test logged sub-second fencing at 23:24:12 IST.",
+         "Total recovery takes 14.19s in live testing (13.18s detection, 1.01s cold evacuation; note: the three figures come from different observation points and do not sum) and 14.33s – 16.39s across fallback repeats. When the failed node returns, the controller matches tombstones in SQLite against the worker's active VM list and executes delete_vm() to fence stale duplicates (fenced in 2.0s–9.33s). Historical Run 6 took 9.33s (wait/shutdown split not instrumented); live test logged immediate fencing at 23:24:12 IST.",
          "failover_timestamped_20261115.txt:L10-L17, chaos_fallback_repeats_20261115.txt:L187-L195"),
         ("Q3: How do you guarantee a rogue VM will not take down the host?",
-         "Each VM runs in a dedicated cgroup v2 slice with hard memory.max (guest RAM + 128 MB overhead; DEFAULT_MEMORY_OVERHEAD_MB = 128 in cgroup_manager.py:L23), cpu.max (1.25x quota), and pids.max (256). In stress tests, the in-guest kernel OOM killer terminates rogue processes internally before the 640MB host limit is reached (oom_kill = 0).",
+         "Each VM runs in a dedicated cgroup v2 slice with hard memory.max (guest RAM + 128 MB overhead; overhead is 128 MB, 256 is pids.max; DEFAULT_MEMORY_OVERHEAD_MB = 128 in cgroup_manager.py:L23), cpu.max (1.25x quota), and pids.max (256). In stress tests, the in-guest kernel OOM killer terminates rogue processes internally before the 640MB host limit is reached (oom_kill = 0).",
          "worker/cgroup_manager.py:L21-L25, evidence/cgroups_memory_stress_20261114.txt:L10-L71"),
         ("Q4: If the controller process crashes, do running VMs terminate?",
          "No. Worker daemons and Cloud Hypervisor processes operate independently. On restart (2.06 s), the reconciler polls worker /vms endpoints and recovers state with 0 orphans and 0 duplicates.",
@@ -547,17 +549,51 @@ def build_presentation():
         p_q = tf_s12.add_paragraph()
         p_q.text = f"{q}"
         p_q.font.bold = True
-        p_q.font.size = Pt(11.5)
+        p_q.font.size = Pt(11)
         p_q.font.color.rgb = c_dark
         p_a = tf_s12.add_paragraph()
         p_a.text = f"Answer: {a} [{src}]"
-        p_a.font.size = Pt(10)
+        p_a.font.size = Pt(9.5)
         p_a.font.color.rgb = c_gray
 
-    prs.save(PPTX_PATH)
-    print(f"Presentation saved to: {PPTX_PATH}")
+    prs.save(PPTX_DRAFT_PATH)
+    prs.save(PPTX_FINAL_PATH)
+    print(f"Presentation saved to:\n  {PPTX_DRAFT_PATH}\n  {PPTX_FINAL_PATH}")
     return len(prs.slides)
+
+def export_pdf_and_png():
+    print("Exporting PPTX to PDF via LibreOffice...")
+    cmd_pdf = ["soffice", "--headless", "--convert-to", "pdf", PPTX_FINAL_PATH, "--outdir", OUTPUT_DIR]
+    res_pdf = subprocess.run(cmd_pdf, capture_output=True, text=True)
+    if res_pdf.returncode != 0:
+        print(f"Error converting to PDF: {res_pdf.stderr}")
+        return False
+    print(f"PDF exported to: {PDF_FINAL_PATH}")
+
+    # Copy to ps023_draft.pdf as well for backward compatibility
+    import shutil
+    shutil.copyfile(PDF_FINAL_PATH, PDF_DRAFT_PATH)
+
+    print("Rendering slides to PNG via pdftoppm...")
+    for f in os.listdir(SLIDES_DIR):
+        if f.endswith(".png"):
+            os.remove(os.path.join(SLIDES_DIR, f))
+    cmd_png = ["pdftoppm", "-png", "-r", "150", PDF_FINAL_PATH, os.path.join(SLIDES_DIR, "slide")]
+    res_png = subprocess.run(cmd_png, capture_output=True, text=True)
+    if res_png.returncode != 0:
+        print(f"Error rendering PNGs: {res_png.stderr}")
+        return False
+
+    pngs = sorted([f for f in os.listdir(SLIDES_DIR) if f.startswith("slide") and f.endswith(".png")])
+    print(f"Rendered {len(pngs)} slide PNGs in {SLIDES_DIR}:")
+    for p in pngs:
+        print(f"  - {p}")
+    return True
 
 if __name__ == "__main__":
     count = build_presentation()
     print(f"Total Slides Generated: {count}")
+    assert count <= 12, f"Slide count {count} exceeds 12 slides maximum!"
+    success = export_pdf_and_png()
+    if not success:
+        sys.exit(1)
