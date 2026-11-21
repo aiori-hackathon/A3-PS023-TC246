@@ -9,7 +9,7 @@
 ## 1. Safety Rules & Operational Standards
 
 1. **Host-Key Verification for Infrastructure**:
-   - Every SSH connection to fixed infrastructure nodes (Node B at `192.168.100.17` or Azure VM `104.211.95.184`) must enforce strict host-key verification:
+   - Every SSH connection to fixed infrastructure nodes (Node B at `192.168.100.17` or Azure VM `<NODE_B_PUBLIC_IP>`) must enforce strict host-key verification:
      `-o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts`
    - Never disable host key verification or discard keys to `/dev/null` for infrastructure nodes.
 2. **Dynamic Guest MicroVM Host Keys**:
@@ -52,7 +52,7 @@ az vm start -g rg-ps023 -n ps023-node-b
 
 # 2. Start persistent SSH tunnel service and subnet proxy:
 systemctl --user start ps023-ssh-tunnel
-~/ps023/.venv/bin/sshuttle -r ubuntu@104.211.95.184 192.168.200.0/24 --daemon --pidfile=/tmp/sshuttle.pid
+~/ps023/.venv/bin/sshuttle -r ubuntu@<NODE_B_PUBLIC_IP> 192.168.200.0/24 --daemon --pidfile=/tmp/sshuttle.pid
 
 # 3. Bring up cluster in SSH tunnel mode:
 TUNNEL_MODE=ssh bash ~/ps023/with-secrets.sh bash ~/ps023/bring-up.sh

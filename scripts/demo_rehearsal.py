@@ -139,7 +139,7 @@ def run_rehearsal(out_file=None):
     # STEP 3: 409 Capacity Refusal
     log("\n[STEP 3: Insufficient Capacity Refusal (HTTP 409)]")
     t0 = time.time()
-    oversized_req = {"name": "rehearsal-too-large", "vcpus": 2, "memory_mb": 4096, "image": "ubuntu-24-04"}
+    oversized_req = {"name": "rehearsal-too-large", "vcpus": 2, "memory_mb": 8192, "image": "ubuntu-24-04"}
     status, err_resp = api_call("/vms", method="POST", data=oversized_req)
     timings["step3_refusal_check_s"] = round(time.time() - t0, 3)
     assert status == 409, f"Expected 409, got {status}: {err_resp}"
