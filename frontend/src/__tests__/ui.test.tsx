@@ -15,25 +15,25 @@ describe("VM Controller Frontend Logic & State", () => {
   });
 
   it("calculates cluster schedulable memory headroom correctly", () => {
-    const schedulableMb = 6792;
-    const reservedMb = 2048;
-    const availableMb = Math.max(0, schedulableMb - reservedMb);
-    expect(availableMb).toBe(4744);
+    const totalAvailableMb = 6792;
+    const reservedMb = 1024; // HOST_RESERVE_MB from resource_monitor.py
+    const schedulableMb = Math.max(0, totalAvailableMb - reservedMb);
+    expect(schedulableMb).toBe(5768);
 
     const requestedMb = 1024;
-    const remainingAfterRequest = Math.max(0, availableMb - requestedMb);
-    expect(remainingAfterRequest).toBe(3720);
-    expect(availableMb >= requestedMb).toBe(true);
+    const remainingAfterRequest = Math.max(0, schedulableMb - requestedMb);
+    expect(remainingAfterRequest).toBe(4744);
+    expect(schedulableMb >= requestedMb).toBe(true);
   });
 
   it("rejects allocation when requested memory exceeds available capacity", () => {
-    const schedulableMb = 2502;
-    const reservedMb = 2048;
-    const availableMb = Math.max(0, schedulableMb - reservedMb);
-    expect(availableMb).toBe(454);
+    const totalAvailableMb = 1400;
+    const reservedMb = 1024; // HOST_RESERVE_MB from resource_monitor.py
+    const schedulableMb = Math.max(0, totalAvailableMb - reservedMb);
+    expect(schedulableMb).toBe(376);
 
     const requestedMb = 1024;
-    const canAccommodate = availableMb >= requestedMb;
+    const canAccommodate = schedulableMb >= requestedMb;
     expect(canAccommodate).toBe(false);
   });
 
