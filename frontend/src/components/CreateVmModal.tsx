@@ -38,10 +38,7 @@ export const CreateVmModal: React.FC<CreateVmModalProps> = ({
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
 
   const [name, setName] = useState("");
-  const [selectedImage, setSelectedImage] = useState<string>(() => {
-    const ready = images.find((i) => i.status === "AVAILABLE" && i.kernel_compat !== "INCOMPATIBLE_BTRFS");
-    return ready?.id || "ubuntu-24-04";
-  });
+  const [selectedImage, setSelectedImage] = useState<string>("ubuntu-24-04");
   const [targetNode, setTargetNode] = useState<string>("auto");
   const [vcpus, setVcpus] = useState<number>(1);
   const [memoryMb, setMemoryMb] = useState<number>(1024);
@@ -101,7 +98,7 @@ export const CreateVmModal: React.FC<CreateVmModalProps> = ({
 
     try {
       const result = await api<any>("POST", "/vms", {
-        name: name.trim().toLowerCase(),
+        name: name.trim(),
         vcpus,
         memory_mb: memoryMb,
         disk_gb: diskGb,
@@ -192,7 +189,7 @@ export const CreateVmModal: React.FC<CreateVmModalProps> = ({
                 Provision Virtual Machine
               </h2>
               <p style={{ fontSize: "12.5px", color: "var(--text-muted)" }}>
-                Guided 5-step workflow with advisory scheduler reservation check
+                Guided 4-step workflow with advisory scheduler reservation check
               </p>
             </div>
           </div>
@@ -398,9 +395,16 @@ export const CreateVmModal: React.FC<CreateVmModalProps> = ({
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "14px", marginBottom: "24px" }}>
                   {images.map((img) => {
                     const isSelected = selectedImage === img.id;
-                    const isAvail = img.status === "AVAILABLE";
-                    const isIncompatible = img.kernel_compat === "INCOMPATIBLE_BTRFS" || img.status === "INCOMPATIBLE_KERNEL";
-                    const isSelectable = isAvail && !isIncompatible;
+                    const hasReady = img.node_status && Object.values(img.node_status).some((s: any) => s === "READY");
+                    const hasFailed = img.node_status && Object.values(img.node_status).some((s: any) => typeof s === "string" && s.startsWith("FAILED"));
+                    const isUnsupported = img.status === "UNSUPPORTED" || (img.node_status && Object.values(img.node_status).every((s: any) => typeof s === "string" && s.startsWith("UNSUPPORTED")));
+                    const isUnavailable = img.status === "UNAVAILABLE" || (img.node_status && Object.values(img.node_status).every((s: any) => typeof s === "string" && s.startsWith("UNAVAILABLE")));
+                    const isSelectable = !isUnavailable && !isUnsupported;
+                    const isAzure = nodes.some((n) => n.backend === "azure" || n.url.includes("8012"));
+                    let badgeText = img.badge || (hasReady ? "Ready to Boot" : isUnsupported ? "Unsupported" : isUnavailable ? "Unavailable" : "Not Verified");
+                    if (isAzure && img.id !== "ubuntu-24-04") {
+                      badgeText = badgeText.replace(/B: Ready/g, "B: Not Staged");
+                    }
 
                     return (
                       <div
@@ -431,27 +435,22 @@ export const CreateVmModal: React.FC<CreateVmModalProps> = ({
                               fontWeight: 700,
                               padding: "2px 8px",
                               borderRadius: "99px",
-                              backgroundColor: isSelectable
+                              backgroundColor: hasReady
                                 ? "rgba(22, 138, 98, 0.14)"
-                                : isIncompatible
+                                : hasFailed
                                 ? "var(--warning-subtle)"
                                 : "rgba(182, 183, 172, 0.15)",
-                              color: isSelectable
+                              color: hasReady
                                 ? "var(--color-emerald-green)"
-                                : isIncompatible
+                                : hasFailed
                                 ? "var(--warning)"
                                 : "var(--text-muted)",
                             }}
                           >
-                            {isSelectable ? "Ready to Boot" : isIncompatible ? "Kernel Incompatible" : "Unavailable"}
+                            {badgeText}
                           </span>
                         </div>
                         <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{img.version}</span>
-                        {isIncompatible && (
-                          <div style={{ fontSize: "11px", color: "var(--warning)", lineHeight: 1.4 }}>
-                            Requires Btrfs kernel. Direct-boot kernel supports ext4.
-                          </div>
-                        )}
                         <div style={{ fontSize: "11px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", marginTop: "2px" }}>
                           {img.format.toUpperCase()} · {img.arch} · {img.disk_size_bytes ? `${Math.round(img.disk_size_bytes / 1024 / 1024)} MB` : "Raw"}
                         </div>
@@ -547,7 +546,7 @@ export const CreateVmModal: React.FC<CreateVmModalProps> = ({
                       <option value="auto">Auto-Select (Recommended by Memory Capacity)</option>
                       {nodes.map((n) => (
                         <option key={n.id} value={n.id} disabled={n.status !== "HEALTHY"}>
-                          {n.id} ({n.status}) - {n.memory_schedulable_mb} MB Schedulable
+                          {n.id === "node-b" ? (n.display_label || (n.backend === "azure" ? "worker-b (Azure)" : "worker-b (local nested)")) : (n.display_label || n.id)} ({n.status}) - {n.memory_schedulable_mb} MB Schedulable
                         </option>
                       ))}
                     </select>

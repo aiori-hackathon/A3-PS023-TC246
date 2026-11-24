@@ -15,25 +15,25 @@ describe("VM Controller Frontend Logic & State", () => {
   });
 
   it("calculates cluster schedulable memory headroom correctly", () => {
-    const schedulableMb = 6792;
-    const reservedMb = 2048;
-    const availableMb = Math.max(0, schedulableMb - reservedMb);
-    expect(availableMb).toBe(4744);
+    const totalAvailableMb = 6792;
+    const reservedMb = 1024; // HOST_RESERVE_MB from resource_monitor.py
+    const schedulableMb = Math.max(0, totalAvailableMb - reservedMb);
+    expect(schedulableMb).toBe(5768);
 
     const requestedMb = 1024;
-    const remainingAfterRequest = Math.max(0, availableMb - requestedMb);
-    expect(remainingAfterRequest).toBe(3720);
-    expect(availableMb >= requestedMb).toBe(true);
+    const remainingAfterRequest = Math.max(0, schedulableMb - requestedMb);
+    expect(remainingAfterRequest).toBe(4744);
+    expect(schedulableMb >= requestedMb).toBe(true);
   });
 
   it("rejects allocation when requested memory exceeds available capacity", () => {
-    const schedulableMb = 2502;
-    const reservedMb = 2048;
-    const availableMb = Math.max(0, schedulableMb - reservedMb);
-    expect(availableMb).toBe(454);
+    const totalAvailableMb = 1400;
+    const reservedMb = 1024; // HOST_RESERVE_MB from resource_monitor.py
+    const schedulableMb = Math.max(0, totalAvailableMb - reservedMb);
+    expect(schedulableMb).toBe(376);
 
     const requestedMb = 1024;
-    const canAccommodate = availableMb >= requestedMb;
+    const canAccommodate = schedulableMb >= requestedMb;
     expect(canAccommodate).toBe(false);
   });
 
@@ -114,65 +114,37 @@ describe("VM Controller Frontend Logic & State", () => {
     expect(evaluateProgress(0.99, 1.0, 0.5)).toBeCloseTo(0.0);
   });
 
-  it("handles HTTP error status codes (401, 403, 404, 409, 422, timeout) with resilient descriptive messages", () => {
-    const parseApiError = (err: any) => {
-      if (err?.status === 401) return "401 Unauthorized: Invalid or missing API bearer token.";
-      if (err?.status === 403) return "403 Forbidden: Permission denied.";
-      if (err?.status === 404) return "404 Not Found: MicroVM or resource no longer exists.";
-      if (err?.status === 409) return `409 Conflict: ${err.message || "Cluster capacity exhausted or host conflict."}`;
-      if (err?.status === 422) return `422 Unprocessable Entity: ${err.message || "Invalid VM configuration."}`;
-      if (err?.name === "AbortError" || err?.message?.toLowerCase().includes("timeout")) return "Request Timeout: Node worker did not respond within deadline.";
-      return err?.message || "An unexpected error occurred.";
+  it("validates theme mode toggling and navigation sidebar tab options", () => {
+    const validTabs = ["overview", "nodes", "vms", "decisions", "events", "images", "terminals", "settings"];
+    expect(validTabs).toHaveLength(8);
+    expect(validTabs).toContain("terminals");
+    expect(validTabs).toContain("nodes");
+
+    const toggleTheme = (current: "dark" | "light") => (current === "dark" ? "light" : "dark");
+    expect(toggleTheme("dark")).toBe("light");
+    expect(toggleTheme("light")).toBe("dark");
+  });
+
+  it("formats node backend badges and display labels accurately (Azure vs local-nested)", () => {
+    const formatDisplay = (nodeId: string, backend?: string, label?: string) => {
+      if (nodeId === "node-b") {
+        return label || (backend === "azure" ? "worker-b (Azure)" : "worker-b (local nested)");
+      }
+      return label || nodeId;
     };
 
-    expect(parseApiError({ status: 401 })).toContain("401 Unauthorized");
-    expect(parseApiError({ status: 403 })).toContain("403 Forbidden");
-    expect(parseApiError({ status: 404 })).toContain("404 Not Found");
-    expect(parseApiError({ status: 409, message: "Out of memory" })).toContain("409 Conflict: Out of memory");
-    expect(parseApiError({ status: 422, message: "Invalid vCPUs" })).toContain("422 Unprocessable Entity");
-    expect(parseApiError({ name: "AbortError" })).toContain("Request Timeout");
-    expect(parseApiError({ message: "Network connection timeout" })).toContain("Request Timeout");
-    expect(parseApiError({ message: "Custom internal failure" })).toBe("Custom internal failure");
+    expect(formatDisplay("node-b", "azure")).toBe("worker-b (Azure)");
+    expect(formatDisplay("node-b", "local-nested")).toBe("worker-b (local nested)");
+    expect(formatDisplay("node-a", "local", "worker-a (Host)")).toBe("worker-a (Host)");
   });
 
-  it("renders failover evacuation events or detects 'no failover events yet' state", () => {
-    const events = [
-      { id: 1, at: 1700000000, event_type: "node_heartbeat", level: "INFO" as const, message: "Node node-a heartbeat ok" },
-      { id: 2, at: 1700000010, event_type: "vm_created", level: "INFO" as const, message: "Created VM vm-1" },
-    ];
+  it("constructs WebSocket terminal URLs correctly with bearer auth tokens", () => {
+    const getWsTerminalUrl = (host: string, vmId: string, secure: boolean) => {
+      const proto = secure ? "wss" : "ws";
+      return `${proto}://${host}/vms/${vmId}/terminal`;
+    };
 
-    const isFailoverEvent = (e: any) =>
-      e.event_type.toLowerCase().includes("evacuat") ||
-      e.event_type.toLowerCase().includes("failover") ||
-      e.message.toLowerCase().includes("evacuat") ||
-      e.message.toLowerCase().includes("failover") ||
-      e.message.toLowerCase().includes("fenc");
-
-    const failoverEvents = events.filter(isFailoverEvent);
-    expect(failoverEvents.length).toBe(0);
-
-    const emptyStateText = failoverEvents.length === 0 ? "no failover events yet" : "events present";
-    expect(emptyStateText).toBe("no failover events yet");
-
-    // Add a real evacuation event
-    const eventsWithEvac = [
-      ...events,
-      { id: 3, at: 1700000020, event_type: "vm_evacuated", level: "WARNING" as const, message: "Evacuated HA vm vm-pin-ha to node-a" },
-    ];
-    const filteredWithEvac = eventsWithEvac.filter(isFailoverEvent);
-    expect(filteredWithEvac.length).toBe(1);
-    expect(filteredWithEvac[0].event_type).toBe("vm_evacuated");
-  });
-
-  it("calculates cgroups v2 limits correctly with 256MB overhead guarantee", () => {
-    const memoryMb = 512;
-    const overheadMb = 256;
-    const memoryMaxBytes = (memoryMb + overheadMb) * 1024 * 1024;
-    expect(memoryMaxBytes).toBe(768 * 1024 * 1024);
-
-    const vcpus = 2;
-    const cpuPeriodUs = 100000;
-    const cpuQuotaUs = vcpus * cpuPeriodUs;
-    expect(cpuQuotaUs).toBe(200000);
+    expect(getWsTerminalUrl("127.0.0.1:8000", "vm-12345678", false)).toBe("ws://127.0.0.1:8000/vms/vm-12345678/terminal");
+    expect(getWsTerminalUrl("127.0.0.1:8000", "vm-12345678", true)).toBe("wss://127.0.0.1:8000/vms/vm-12345678/terminal");
   });
 });

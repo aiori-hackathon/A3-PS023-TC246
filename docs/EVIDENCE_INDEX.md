@@ -14,7 +14,7 @@ This index maps every performance claim, benchmark figure, and operational metri
 | **Node A Full Boot (Diagnostic 15-Run Bimodality Set)** | Min: 7.058 s, Median: 8.372 s, Max: 16.398 s (pollinate delay observed in 1 of 5 instrumented runs; cause not established; host-contention test did not show an effect) | [boot_node_a_bimodality_20261114.txt](file:///home/rajyavardhan/ps023/evidence/boot_node_a_bimodality_20261114.txt) | L49–L55 | **VERIFIED** |
 | **Node B Nested API Create -> Status RUNNING** | 3.222 s – 3.994 s (median 3.497 s) | [boot_test_fallback_20261114.txt](file:///home/rajyavardhan/ps023/evidence/boot_test_fallback_20261114.txt) | L41–L45 | **VERIFIED** |
 | **Node B Nested Full Boot (API -> SSH Ready)** | 11.775 s – 19.027 s (median 13.130 s) | [boot_test_fallback_20261114.txt](file:///home/rajyavardhan/ps023/evidence/boot_test_fallback_20261114.txt) | L46–L50 | **VERIFIED** |
-| **Azure Node B Boot Speed** | *Not measured separately from Azure chaos runs* | — | — | **Not measured** |
+| **Azure Node B Boot Speed** | API: 1.66 s – 1.68 s, SSH Ready: 12.97 s – 16.29 s (median 14.14 s, Ubuntu 24.04, 512 MB) | [azure_integrated_20261124.txt](file:///home/rajyavardhan/ps023/evidence/azure_integrated_20261124.txt) | L31–L36 | **VERIFIED** |
 
 ---
 
@@ -36,7 +36,8 @@ Source: [chaos_fallback_repeats_20261115.txt](file:///home/rajyavardhan/ps023/ev
 *Note on Run 6 (9.33 s Fencing)*: Fencing of the stale VMM was verified at 9.33 s post-return; the split between wait and shutdown was not instrumented.
 
 ### B. Azure Hybrid Cloud Environment (Historical Recorded Runs, 13–14 Nov 2026)
-Source: [chaos_azure_repeats_20261114.txt](file:///home/rajyavardhan/ps023/evidence/chaos_azure_repeats_20261114.txt) (Transport: SSH tunnel / sshuttle)
+Source: [chaos_azure_repeats_20261114.txt](file:///home/rajyavardhan/ps023/evidence/chaos_azure_repeats_20261114.txt) (Transport: SSH tunnel / sshuttle)  
+*Kernel Hash Note*: These historical 13–14 Nov Azure benchmark runs utilized direct kernel SHA-256 `30afafe903cc53bd06d887a23698af15fca0f9ff89151870226c4c3889d46b54`.
 
 | Run | Chaos Mode | Detection Delay (s) | Cold Evac Latency (s) | Total Recovery (s) | Outcome | Line(s) |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -48,6 +49,23 @@ Source: [chaos_azure_repeats_20261114.txt](file:///home/rajyavardhan/ps023/evide
 | **Run 6** | `worker-preserve-vms` | 15.92 s | 0.36 s | 15.97 s | Evacuated to RUNNING | L407 |
 
 *Note on Azure Suite*: Total recovery ranges from **15.35 s to 21.05 s**. Detection is 15.32 s – 19.99 s (~15–20 s of total), and cold evacuation is 0.35 s – 0.36 s.
+
+### C. Azure Hybrid Cloud Integrated Verification (24 Nov 2026)
+Source: [azure_integrated_20261124.txt](file:///home/rajyavardhan/ps023/evidence/azure_integrated_20261124.txt) (Transport: `ssh-tunnel`)  
+*Kernel Hash*: `4b01f4fca87bac07c1b8a6884293e90386e62e05dc8a47d4e96fb830a9280e3f` (with `CONFIG_RAID6_PQ_BENCHMARK=n`)  
+*Kernel Release*: `6.16.9+` (compiled Mon Nov 23 21:45:00 IST 2026 from `lab/linux-cloud-hypervisor` branch `ch-6.16.9`). Replaced previous kernel `30afafe9...`. (Note: in-guest runtime `uname -r` confirmed as `6.16.9+` from official Step B build; 10-minute Azure runtime verification commands provided for on-demand approval).
+
+| Scenario | Measured Latency / Outcome | Evidence File | Line(s) | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **Cluster State & Node Labels** | `node-a`: local (`worker-a (Host)`), `node-b`: azure (`worker-b (Azure)`) | [azure_integrated_20261124.txt](file:///home/rajyavardhan/ps023/evidence/azure_integrated_20261124.txt) | L11–L14 | **VERIFIED** |
+| **Node A Pinned Launch** | API: 1.38 s (`vm-f79967ff`, 192.168.100.10) | [azure_integrated_20261124.txt](file:///home/rajyavardhan/ps023/evidence/azure_integrated_20261124.txt) | L17–L18 | **VERIFIED** |
+| **Node B Azure Pinned Launch** | API: 1.59 s (`vm-614c2096`, 192.168.200.11) | [azure_integrated_20261124.txt](file:///home/rajyavardhan/ps023/evidence/azure_integrated_20261124.txt) | L21–L22 | **VERIFIED** |
+| **Auto Placement** | API: 1.64 s placed on `node-b` (highest headroom) | [azure_integrated_20261124.txt](file:///home/rajyavardhan/ps023/evidence/azure_integrated_20261124.txt) | L25–L26 | **VERIFIED** |
+| **409 Conflict Guard** | HTTP 409 refused unstaged `debian-12` on Azure Node B | [azure_integrated_20261124.txt](file:///home/rajyavardhan/ps023/evidence/azure_integrated_20261124.txt) | L29–L30 | **VERIFIED** |
+| **Node B SSH Boot (3 Runs)** | Run 1: 12.97 s, Run 2: 14.14 s, Run 3: 16.29 s (median 14.14 s) | [azure_integrated_20261124.txt](file:///home/rajyavardhan/ps023/evidence/azure_integrated_20261124.txt) | L33–L46 | **VERIFIED** |
+| **Browser Terminal WebSocket** | Active, verified guest bash execution & prompt reply | [azure_integrated_20261124.txt](file:///home/rajyavardhan/ps023/evidence/azure_integrated_20261124.txt) | L48–L51 | **VERIFIED** |
+| **HA Cold Evacuation** | Detection: 14.75 s, Cold Evac: 0.00 s, Total Recovery: 14.75 s | [azure_integrated_20261124.txt](file:///home/rajyavardhan/ps023/evidence/azure_integrated_20261124.txt) | L53–L68 | **VERIFIED** |
+
 
 ---
 
