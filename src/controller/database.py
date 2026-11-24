@@ -19,7 +19,9 @@ CREATE TABLE IF NOT EXISTS nodes (
     cpu_total INTEGER,
     vms_running INTEGER,
     last_heartbeat REAL,
-    cgroups_enabled INTEGER NOT NULL DEFAULT 0
+    cgroups_enabled INTEGER NOT NULL DEFAULT 0,
+    backend TEXT DEFAULT 'local',
+    display_label TEXT
 );
 CREATE TABLE IF NOT EXISTS vms (
     id TEXT PRIMARY KEY,
@@ -88,7 +90,13 @@ CREATE TABLE IF NOT EXISTS images (
     notes TEXT,
     kernel_path TEXT,
     initrd_path TEXT,
-    cmdline TEXT DEFAULT 'console=ttyS0 root=/dev/vda1'
+    cmdline TEXT DEFAULT 'console=ttyS0 root=/dev/vda1',
+    root_device TEXT DEFAULT '/dev/vda1',
+    root_flags TEXT DEFAULT 'rw',
+    default_user TEXT DEFAULT 'ubuntu',
+    ssh_user TEXT DEFAULT 'ubuntu',
+    cmdline_extra TEXT DEFAULT '',
+    boot_mode TEXT DEFAULT 'direct'
 );
 CREATE TABLE IF NOT EXISTS node_metrics (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -123,6 +131,12 @@ DEFAULT_IMAGES = [
         "checksum": "sha256:78c756f1272375e29b03ff62225c9a51e640c55059e745b4a3eca3a1efbdebf0",
         "download_url": "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img",
         "kernel_compat": "COMPATIBLE",
+        "root_device": "/dev/vda1",
+        "root_flags": "rw",
+        "default_user": "ubuntu",
+        "ssh_user": "ubuntu",
+        "cmdline_extra": "",
+        "boot_mode": "direct",
         "notes": "Ubuntu noble raw disk image. Checksum computed locally, not compared to upstream. Bootable out of the box via direct kernel boot.",
     },
     {
@@ -139,6 +153,12 @@ DEFAULT_IMAGES = [
         "checksum": "sha256:97df81890768b28518dd236b937f5b59342d6212b48179d8a8b9230c27c6eb27",
         "download_url": "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.raw",
         "kernel_compat": "COMPATIBLE",
+        "root_device": "/dev/vda1",
+        "root_flags": "rw",
+        "default_user": "debian",
+        "ssh_user": "debian",
+        "cmdline_extra": "",
+        "boot_mode": "direct",
         "notes": "Debian 12 genericcloud raw image. Checksum computed locally, not compared to upstream. Status: not boot-tested.",
     },
     {
@@ -149,45 +169,65 @@ DEFAULT_IMAGES = [
         "arch": "x86_64",
         "format": "raw",
         "path": str(Path.home() / "ps023" / "images" / "fedora-40.raw"),
-        "disk_size_bytes": None,
+        "disk_size_bytes": 5368709120,
         "status": "NOT_DOWNLOADED",
-        "verification_status": "UNVERIFIED",
-        "checksum": "no checksum",
+        "verification_status": "OFFICIAL_UPSTREAM",
+        "checksum": "sha256:ac58f3c35b73272d5986fa6d3bc44fd246b45df4c334e99a07b3bbd00684adee",
         "download_url": "https://archives.fedoraproject.org/pub/archive/fedora/linux/releases/40/Cloud/x86_64/images/Fedora-Cloud-Base-Generic.x86_64-40-1.14.qcow2",
-        "kernel_compat": "REQUIRES_CONVERSION",
-        "notes": "Fedora Cloud Base image (not downloaded, no checksum). Must be converted from QCOW2 to RAW format. Status: not boot-tested.",
+        "kernel_compat": "COMPATIBLE",
+        "root_device": "/dev/vda4",
+        "root_flags": "rootflags=subvol=root rw",
+        "default_user": "fedora",
+        "ssh_user": "fedora",
+        "cmdline_extra": "",
+        "boot_mode": "direct",
+        "notes": "Fedora Cloud Base image. Converted from QCOW2 to sparse RAW. Btrfs root on vda4 subvol=root.",
     },
     {
         "id": "rocky-9",
-        "name": "Rocky Linux 9",
+        "name": "Rocky Linux 9.9",
         "distro": "Rocky Linux",
-        "version": "9.4 (Blue Onyx)",
+        "version": "9.9 (Blue Onyx)",
         "arch": "x86_64",
         "format": "raw",
         "path": str(Path.home() / "ps023" / "images" / "rocky-9.raw"),
-        "disk_size_bytes": None,
+        "disk_size_bytes": 10737418240,
         "status": "NOT_DOWNLOADED",
-        "verification_status": "UNVERIFIED",
-        "checksum": "no checksum",
+        "verification_status": "OFFICIAL_UPSTREAM",
+        "checksum": "sha256:4f88f4209de50813d8054ab97309e7169a580206a0c4ea04f375d36c4846d50e",
         "download_url": "https://download.rockylinux.org/pub/rocky/9/images/x86_64/Rocky-9-GenericCloud-Base.latest.x86_64.qcow2",
-        "kernel_compat": "REQUIRES_CONVERSION",
-        "notes": "Rocky Linux 9 GenericCloud image (not downloaded, no checksum). Requires QCOW2 to RAW conversion. Status: not boot-tested.",
+        "kernel_compat": "COMPATIBLE",
+        "root_device": "/dev/vda4",
+        "root_flags": "rw",
+        "default_user": "rocky",
+        "ssh_user": "rocky",
+        "cmdline_extra": "",
+        "boot_mode": "direct",
+        "rename_nic": 1,
+        "notes": "Rocky Linux 9.9 GenericCloud image. Converted from QCOW2 to sparse RAW. XFS root on vda4.",
     },
     {
         "id": "almalinux-9",
-        "name": "AlmaLinux 9",
+        "name": "AlmaLinux 9.4",
         "distro": "AlmaLinux",
         "version": "9.4 (Seafoam Ocelot)",
         "arch": "x86_64",
         "format": "raw",
         "path": str(Path.home() / "ps023" / "images" / "almalinux-9.raw"),
-        "disk_size_bytes": None,
+        "disk_size_bytes": 10737418240,
         "status": "NOT_DOWNLOADED",
-        "verification_status": "UNVERIFIED",
-        "checksum": "no checksum",
-        "download_url": "https://repo.almalinux.org/almalinux/9/cloud/x86_64/images/AlmaLinux-9-GenericCloud-latest.x86_64.qcow2",
-        "kernel_compat": "REQUIRES_CONVERSION",
-        "notes": "AlmaLinux 9 GenericCloud image (not downloaded, no checksum). Requires QCOW2 to RAW conversion. Status: not boot-tested.",
+        "verification_status": "OFFICIAL_UPSTREAM",
+        "checksum": "sha256:4f2984589020c0d82b9a410cf9e29715a607c948dfdca652025cdc79ddb5e816",
+        "download_url": "https://vault.almalinux.org/9.4/cloud/x86_64/images/AlmaLinux-9-GenericCloud-9.4-20240805.x86_64.qcow2",
+        "kernel_compat": "COMPATIBLE",
+        "root_device": "/dev/vda4",
+        "root_flags": "rw",
+        "default_user": "almalinux",
+        "ssh_user": "almalinux",
+        "cmdline_extra": "",
+        "boot_mode": "direct",
+        "rename_nic": 1,
+        "notes": "AlmaLinux 9.4 GenericCloud image. Converted from QCOW2 to sparse RAW. XFS root on vda4.",
     },
     {
         "id": "opensuse-15-6",
@@ -197,13 +237,20 @@ DEFAULT_IMAGES = [
         "arch": "x86_64",
         "format": "raw",
         "path": str(Path.home() / "ps023" / "images" / "opensuse-15-6.raw"),
-        "disk_size_bytes": None,
+        "disk_size_bytes": 879755264,
         "status": "NOT_DOWNLOADED",
-        "verification_status": "UNVERIFIED",
-        "checksum": "no checksum",
+        "verification_status": "OFFICIAL_UPSTREAM",
+        "checksum": "sha256:0a5720416d423f98aacaa793a57d56ec045e3dd25cd88713952660ad00da53bd",
         "download_url": "https://download.opensuse.org/distribution/leap/15.6/appliances/openSUSE-Leap-15.6-Minimal-VM.x86_64-Cloud.qcow2",
-        "kernel_compat": "REQUIRES_CONVERSION",
-        "notes": "openSUSE Leap 15.6 Cloud appliance (not downloaded, no checksum). Requires QCOW2 to RAW conversion. Status: not boot-tested.",
+        "kernel_compat": "COMPATIBLE",
+        "root_device": "/dev/vda3",
+        "root_flags": "rw",
+        "default_user": "opensuse",
+        "ssh_user": "opensuse",
+        "cmdline_extra": "",
+        "boot_mode": "direct",
+        "rename_nic": 0,
+        "notes": "openSUSE Leap 15.6 Cloud appliance. Converted from QCOW2 to sparse RAW. XFS root on vda3.",
     },
     {
         "id": "arch-linux",
@@ -214,12 +261,19 @@ DEFAULT_IMAGES = [
         "format": "raw",
         "path": str(Path.home() / "ps023" / "images" / "arch-linux.raw"),
         "disk_size_bytes": 2147483648,
-        "status": "INCOMPATIBLE_KERNEL",
+        "status": "NOT_DOWNLOADED",
         "verification_status": "COMPUTED_LOCALLY",
         "checksum": "sha256:c7d27449e8fa2732a97fcf5c4e56f35762c230873b00328384c1226b2fa30bc9",
         "download_url": "https://geo.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2",
-        "kernel_compat": "INCOMPATIBLE_BTRFS",
-        "notes": "Arch Linux raw disk image. Checksum computed locally, not compared to upstream. Status: not boot-tested. Direct-boot kernel requires ext4 (btrfs incompatible).",
+        "kernel_compat": "COMPATIBLE",
+        "root_device": "/dev/vda3",
+        "root_flags": "rw",
+        "default_user": "arch",
+        "ssh_user": "arch",
+        "cmdline_extra": "",
+        "boot_mode": "direct",
+        "rename_nic": 1,
+        "notes": "Arch Linux raw disk image. Btrfs root on vda3 (subvolume ID 5 default).",
     },
     {
         "id": "alpine-3-20",
@@ -229,16 +283,23 @@ DEFAULT_IMAGES = [
         "arch": "x86_64",
         "format": "raw",
         "path": str(Path.home() / "ps023" / "images" / "alpine-3-20.raw"),
-        "disk_size_bytes": 134217728,
+        "disk_size_bytes": 205520896,
         "status": "NOT_DOWNLOADED",
         "verification_status": "OFFICIAL_UPSTREAM",
         "checksum": "sha256:81df854fbd7327d293c726b1eeeb82061d3bc8f5a86a6f77eea720f6be372261",
-        "download_url": "https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/x86_64/alpine-virt-3.20.3-x86_64.iso",
+        "download_url": "https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/cloud/nocloud_alpine-3.20.3-x86_64-bios-cloudinit-r0.qcow2",
         "kernel_compat": "COMPATIBLE",
         "kernel_path": "/boot/vmlinuz-virt",
         "initrd_path": "/boot/initramfs-virt",
-        "cmdline": "console=ttyS0 root=/dev/vda1 modules=ext4,virtio_pci,virtio_net",
-        "notes": "Official Alpine Linux 3.20 virt image (not downloaded). Upstream official release SHA-256 from https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/x86_64/alpine-virt-3.20.3-x86_64.iso.sha256. Status: not boot-tested.",
+        "cmdline": "console=ttyS0 root=/dev/vda1",
+        "root_device": "/dev/vda",
+        "root_flags": "rw",
+        "default_user": "alpine",
+        "ssh_user": "alpine",
+        "cmdline_extra": "",
+        "boot_mode": "direct",
+        "rename_nic": 1,
+        "notes": "Official Alpine Linux 3.20 virt image (not downloaded). Status: not boot-tested. Whole-disk ext4 root on vda.",
     },
     {
         "id": "cirros-0-6-2",
@@ -247,17 +308,24 @@ DEFAULT_IMAGES = [
         "version": "0.6.2",
         "arch": "x86_64",
         "format": "raw",
-        "path": str(Path.home() / "ps023" / "images" / "cirros-0.6.2-x86_64-disk.img"),
-        "disk_size_bytes": 16777216,
-        "status": "NOT_DOWNLOADED",
+        "path": str(Path.home() / "ps023" / "images" / "cirros-0-6-2.raw"),
+        "disk_size_bytes": 117440512,
+        "status": "UNSUPPORTED",
         "verification_status": "OFFICIAL_MD5",
         "checksum": "md5:c8fc807773e5354afe61636071771906",
         "download_url": "https://download.cirros-cloud.net/0.6.2/cirros-0.6.2-x86_64-disk.img",
         "kernel_compat": "COMPATIBLE",
         "kernel_path": "/boot/vmlinuz",
-        "initrd_path": "/boot/initrd.img",
+        "initrd_path": str(Path.home() / "ps023" / "images" / "cirros-initrd.img"),
         "cmdline": "console=ttyS0 root=/dev/vda1 ro",
-        "notes": "Official CirrOS 0.6.2 minimal image (not downloaded). Official MD5 from upstream MD5SUMS (c8fc807773e5354afe61636071771906). Status: not boot-tested.",
+        "root_device": "/dev/vda1",
+        "root_flags": "ro",
+        "default_user": "cirros",
+        "ssh_user": "cirros",
+        "cmdline_extra": "",
+        "boot_mode": "direct",
+        "rename_nic": 1,
+        "notes": "Official CirrOS 0.6.2 minimal image. Status: UNSUPPORTED. Kernel and initramfs boot successfully, but image lacks cloud-init v2 static network-config support and requires an external DHCP server.",
     },
 ]
 
@@ -269,7 +337,8 @@ VM_FIELDS = {
     "cgroups", "cgroup_limits"
 }
 NODE_FIELDS = {"url", "status", "memory_total_mb", "memory_schedulable_mb",
-               "cpu_total", "vms_running", "last_heartbeat", "cgroups_enabled"}
+               "cpu_total", "vms_running", "last_heartbeat", "cgroups_enabled",
+               "backend", "display_label"}
 
 
 def _enforce_db_permissions(db_file):
@@ -316,6 +385,10 @@ def init_db(path=None):
         node_cols = {col[1] for col in cursor.execute("PRAGMA table_info(nodes)").fetchall()}
         if "cgroups_enabled" not in node_cols:
             cursor.execute("ALTER TABLE nodes ADD COLUMN cgroups_enabled INTEGER NOT NULL DEFAULT 0")
+        if "backend" not in node_cols:
+            cursor.execute("ALTER TABLE nodes ADD COLUMN backend TEXT DEFAULT 'local'")
+        if "display_label" not in node_cols:
+            cursor.execute("ALTER TABLE nodes ADD COLUMN display_label TEXT")
 
         vm_cols = {col[1] for col in cursor.execute("PRAGMA table_info(vms)").fetchall()}
         new_cols = [
@@ -343,6 +416,13 @@ def init_db(path=None):
             ("kernel_path", "TEXT"),
             ("initrd_path", "TEXT"),
             ("cmdline", "TEXT DEFAULT 'console=ttyS0 root=/dev/vda1'"),
+            ("root_device", "TEXT DEFAULT '/dev/vda1'"),
+            ("root_flags", "TEXT DEFAULT 'rw'"),
+            ("default_user", "TEXT DEFAULT 'ubuntu'"),
+            ("ssh_user", "TEXT DEFAULT 'ubuntu'"),
+            ("cmdline_extra", "TEXT DEFAULT ''"),
+            ("boot_mode", "TEXT DEFAULT 'direct'"),
+            ("rename_nic", "INTEGER DEFAULT 1"),
         ]
         for col_name, col_def in new_img_cols:
             if col_name not in img_cols:
@@ -354,8 +434,9 @@ def init_db(path=None):
                 cursor.execute(
                     "INSERT INTO images (id, name, distro, version, arch, format, path, "
                     "disk_size_bytes, status, verification_status, checksum, download_url, "
-                    "created_at, kernel_compat, notes, kernel_path, initrd_path, cmdline) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "created_at, kernel_compat, notes, kernel_path, initrd_path, cmdline, "
+                    "root_device, root_flags, default_user, ssh_user, cmdline_extra, boot_mode, rename_nic) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (img["id"], img["name"], img["distro"], img["version"],
                      img.get("arch", "x86_64"), img.get("format", "raw"), img.get("path"),
                      img.get("disk_size_bytes"), img.get("status", "AVAILABLE"),
@@ -363,7 +444,36 @@ def init_db(path=None):
                      img.get("download_url"), time.time(),
                      img.get("kernel_compat", "COMPATIBLE"), img.get("notes"),
                      img.get("kernel_path"), img.get("initrd_path"),
-                     img.get("cmdline", "console=ttyS0 root=/dev/vda1"))
+                     img.get("cmdline", "console=ttyS0 root=/dev/vda1"),
+                     img.get("root_device", "/dev/vda1"),
+                     img.get("root_flags", "rw"),
+                     img.get("default_user", "ubuntu"),
+                     img.get("ssh_user", img.get("default_user", "ubuntu")),
+                     img.get("cmdline_extra", ""),
+                     img.get("boot_mode", "direct"),
+                     img.get("rename_nic", 1))
+                )
+            else:
+                cursor.execute(
+                    "UPDATE images SET path = ?, "
+                    "initrd_path = ?, "
+                    "root_device = ?, "
+                    "root_flags = ?, "
+                    "default_user = ?, "
+                    "ssh_user = ?, "
+                    "cmdline_extra = ?, "
+                    "boot_mode = ?, "
+                    "rename_nic = ? WHERE id = ?",
+                    (img.get("path"),
+                     img.get("initrd_path"),
+                     img.get("root_device", "/dev/vda1"),
+                     img.get("root_flags", "rw"),
+                     img.get("default_user", "ubuntu"),
+                     img.get("ssh_user", img.get("default_user", "ubuntu")),
+                     img.get("cmdline_extra", ""),
+                     img.get("boot_mode", "direct"),
+                     img.get("rename_nic", 1),
+                     img["id"])
                 )
 
         # Idempotent startup migration for image catalog integrity
@@ -424,6 +534,12 @@ def init_db(path=None):
             "WHERE id = 'arch-linux' AND checksum LIKE 'sha256:08754e%'"
         )
 
+        # 6. Recompute kernel_compat for all images (kernel supports ext4, xfs, btrfs built-in)
+        cursor.execute(
+            "UPDATE images SET kernel_compat = 'COMPATIBLE' "
+            "WHERE kernel_compat != 'COMPATIBLE' OR kernel_compat IS NULL"
+        )
+
 
 def _rows(cur):
     return [dict(r) for r in cur.fetchall()]
@@ -435,6 +551,25 @@ def _format_node(node):
     d = dict(node)
     if "cgroups_enabled" in d:
         d["cgroups_enabled"] = bool(d["cgroups_enabled"])
+    if not d.get("backend"):
+        if d.get("id") == "node-a":
+            d["backend"] = "local"
+            d["display_label"] = d.get("display_label") or "worker-a (Host)"
+        elif d.get("id") == "node-b":
+            url = d.get("url", "")
+            if "10.100.0." in url or "8012" in url:
+                d["backend"] = "azure"
+                d["display_label"] = d.get("display_label") or "worker-b (Azure)"
+            else:
+                d["backend"] = "local-nested"
+                d["display_label"] = d.get("display_label") or "worker-b (local nested)"
+    if not d.get("display_label"):
+        if d.get("backend") == "azure":
+            d["display_label"] = "worker-b (Azure)"
+        elif d.get("backend") == "local-nested":
+            d["display_label"] = "worker-b (local nested)"
+        else:
+            d["display_label"] = d.get("id", "worker")
     return d
 
 
@@ -460,12 +595,32 @@ def _format_vm(vm):
 
 
 # ---------- nodes ----------
-def upsert_node(node_id, url, path=None):
+def upsert_node(node_id, url, path=None, backend=None, display_label=None):
+    if backend is None:
+        if node_id == "node-a":
+            backend = "local"
+            display_label = display_label or "worker-a (Host)"
+        elif node_id == "node-b":
+            if "10.100.0." in url or "8012" in url:
+                backend = "azure"
+                display_label = display_label or "worker-b (Azure)"
+            else:
+                backend = "local-nested"
+                display_label = display_label or "worker-b (local nested)"
+    else:
+        if display_label is None:
+            if backend == "azure":
+                display_label = "worker-b (Azure)"
+            elif backend == "local-nested":
+                display_label = "worker-b (local nested)"
+            else:
+                display_label = node_id
+
     with connect(path) as c:
         c.execute(
-            "INSERT INTO nodes (id, url) VALUES (?, ?) "
-            "ON CONFLICT(id) DO UPDATE SET url = excluded.url",
-            (node_id, url),
+            "INSERT INTO nodes (id, url, backend, display_label) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(id) DO UPDATE SET url = excluded.url, backend = excluded.backend, display_label = excluded.display_label",
+            (node_id, url, backend, display_label),
         )
 
 
@@ -643,13 +798,17 @@ def upsert_image(image_id, name, distro, version="1.0", arch="x86_64",
                  status="AVAILABLE", verification_status="VERIFIED",
                  checksum=None, download_url=None, kernel_compat="COMPATIBLE",
                  notes=None, kernel_path=None, initrd_path=None,
-                 cmdline="console=ttyS0 root=/dev/vda1", path=None):
+                 cmdline="console=ttyS0 root=/dev/vda1",
+                 root_device="/dev/vda1", root_flags="rw",
+                 default_user="ubuntu", ssh_user="ubuntu", cmdline_extra="",
+                 boot_mode="direct", path=None):
     with connect(path) as c:
         c.execute(
             "INSERT INTO images (id, name, distro, version, arch, format, path, "
             "disk_size_bytes, status, verification_status, checksum, download_url, "
-            "created_at, kernel_compat, notes, kernel_path, initrd_path, cmdline) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            "created_at, kernel_compat, notes, kernel_path, initrd_path, cmdline, "
+            "root_device, root_flags, default_user, ssh_user, cmdline_extra, boot_mode) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(id) DO UPDATE SET "
             "name=excluded.name, distro=excluded.distro, version=excluded.version, "
             "arch=excluded.arch, format=excluded.format, path=excluded.path, "
@@ -657,11 +816,15 @@ def upsert_image(image_id, name, distro, version="1.0", arch="x86_64",
             "verification_status=excluded.verification_status, checksum=excluded.checksum, "
             "download_url=excluded.download_url, kernel_compat=excluded.kernel_compat, "
             "notes=excluded.notes, kernel_path=excluded.kernel_path, "
-            "initrd_path=excluded.initrd_path, cmdline=excluded.cmdline",
+            "initrd_path=excluded.initrd_path, cmdline=excluded.cmdline, "
+            "root_device=excluded.root_device, root_flags=excluded.root_flags, "
+            "default_user=excluded.default_user, ssh_user=excluded.ssh_user, "
+            "cmdline_extra=excluded.cmdline_extra, boot_mode=excluded.boot_mode",
             (image_id, name, distro, version, arch, format, path_img,
              disk_size_bytes, status, verification_status, checksum,
              download_url, time.time(), kernel_compat, notes,
-             kernel_path, initrd_path, cmdline),
+             kernel_path, initrd_path, cmdline,
+             root_device, root_flags, default_user, ssh_user, cmdline_extra, boot_mode),
         )
 
 

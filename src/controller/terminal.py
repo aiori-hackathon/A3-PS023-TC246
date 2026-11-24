@@ -83,14 +83,25 @@ async def terminal(ws: WebSocket, vm_id: str):
             return
         _active += 1
     try:
-        await _relay(ws, vm["ip_address"], password, hello)
+        await _relay(ws, vm["ip_address"], password, hello, vm=vm)
     finally:
         async with _session_lock:
             _active -= 1
 
 
-async def _relay(ws, ip, password, hello):
-    user = os.environ.get("PS023_VM_USER", "rajyavardhan")
+async def _relay(ws, ip, password, hello, vm=None):
+    user = os.environ.get("PS023_VM_USER")
+    if not user and vm and isinstance(vm, dict):
+        img_id = vm.get("image")
+        if img_id:
+            try:
+                img = db.get_image(img_id)
+                if img:
+                    user = img.get("ssh_user") or img.get("default_user")
+            except Exception:
+                pass
+    if not user:
+        user = "ubuntu"
     try:
         conn = await asyncssh.connect(
             ip, username=user, password=password, known_hosts=KNOWN_HOSTS_PATH,
