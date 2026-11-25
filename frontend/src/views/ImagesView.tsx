@@ -10,7 +10,6 @@ import {
   RefreshCw,
   ExternalLink,
   ShieldCheck,
-  ShieldAlert,
   FolderOpen,
   Info,
   Copy,
@@ -198,7 +197,10 @@ export const ImagesView: React.FC<ImagesViewProps> = ({ images, vms, onRefresh }
         }}
       >
         {images.map((img) => {
-          const isAvail = img.status === "AVAILABLE";
+          const isAvail =
+            img.status === "AVAILABLE" ||
+            img.status === "READY" ||
+            (img.node_status && Object.values(img.node_status).some((s: any) => s === "READY"));
           const isMissing = img.status === "MISSING";
           const isValidating = validatingId === img.id;
           const dependentVms = vms.filter((v) => v.image === img.id);
@@ -307,17 +309,8 @@ export const ImagesView: React.FC<ImagesViewProps> = ({ images, vms, onRefresh }
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <span style={{ color: "var(--text-muted)" }}>Verification:</span>
-                    <span style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "4px",
-                      color: img.verification_status === "UNVERIFIED"
-                        ? "var(--text-muted)"
-                        : isAvail
-                        ? "var(--primary)"
-                        : "var(--text-secondary)"
-                    }}>
-                      {img.verification_status === "UNVERIFIED" ? <ShieldAlert size={13} /> : <ShieldCheck size={13} />}
+                    <span style={{ display: "flex", alignItems: "center", gap: "4px", color: isAvail ? "var(--primary)" : "var(--text-secondary)" }}>
+                      <ShieldCheck size={13} />
                       <span>{img.verification_status}</span>
                     </span>
                   </div>
