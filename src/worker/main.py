@@ -28,6 +28,7 @@ class CreateVM(BaseModel):
     memory_mb: int = Field(ge=128, le=8192)
     disk_gb: int = Field(default=4, ge=1, le=50)
     start: bool = True
+    image: str = "ubuntu-24-04"
 
 
 @app.exception_handler(VMError)
@@ -65,7 +66,7 @@ def create_vm(req: CreateVM):
             detail=(f"insufficient memory: requested {req.memory_mb} MB, "
                     f"schedulable {res['memory_schedulable_mb']} MB"),
         )
-    meta = manager.create(req.name, req.vcpus, req.memory_mb, req.disk_gb)
+    meta = manager.create(req.name, req.vcpus, req.memory_mb, req.disk_gb, image=req.image)
     if req.start:
         try:
             manager.start(meta["id"])

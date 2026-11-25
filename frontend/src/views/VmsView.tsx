@@ -48,19 +48,8 @@ export const VmsView: React.FC<VmsViewProps> = ({
   const [actionInProgress, setActionInProgress] = useState<Record<string, string>>({}); // vmId -> actionName
   const [actionError, setActionError] = useState<{ vmId: string; error: string } | null>(null);
   const [deleteCandidate, setDeleteCandidate] = useState<VM | null>(null);
-  const [stopCandidate, setStopCandidate] = useState<VM | null>(null);
   const [detailCandidate, setDetailCandidate] = useState<VM | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-
-  const parseApiError = (err: any) => {
-    if (err?.status === 401) return "401 Unauthorized: Invalid or missing API bearer token.";
-    if (err?.status === 403) return "403 Forbidden: Permission denied.";
-    if (err?.status === 404) return "404 Not Found: MicroVM or resource no longer exists.";
-    if (err?.status === 409) return `409 Conflict: ${err.message || "Cluster capacity exhausted or host conflict."}`;
-    if (err?.status === 422) return `422 Unprocessable Entity: ${err.message || "Invalid VM configuration."}`;
-    if (err?.name === "AbortError" || err?.message?.toLowerCase().includes("timeout")) return "Request Timeout: Node worker did not respond within deadline.";
-    return err?.message || "An unexpected error occurred.";
-  };
 
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -75,7 +64,7 @@ export const VmsView: React.FC<VmsViewProps> = ({
       await api("POST", `/vms/${vm.id}/start`);
       onRefresh();
     } catch (err: any) {
-      setActionError({ vmId: vm.id, error: `Start failed: ${parseApiError(err)}` });
+      setActionError({ vmId: vm.id, error: `Start failed: ${err.message}` });
     } finally {
       setActionInProgress((prev) => {
         const next = { ...prev };
@@ -86,14 +75,13 @@ export const VmsView: React.FC<VmsViewProps> = ({
   };
 
   const handleStop = async (vm: VM) => {
-    setStopCandidate(null);
     setActionInProgress((prev) => ({ ...prev, [vm.id]: "Stopping (escalating shutdown)" }));
     setActionError(null);
     try {
       await api("POST", `/vms/${vm.id}/stop`);
       onRefresh();
     } catch (err: any) {
-      setActionError({ vmId: vm.id, error: `Stop failed: ${parseApiError(err)}` });
+      setActionError({ vmId: vm.id, error: `Stop failed: ${err.message}` });
     } finally {
       setActionInProgress((prev) => {
         const next = { ...prev };
@@ -114,7 +102,7 @@ export const VmsView: React.FC<VmsViewProps> = ({
       await api("DELETE", `/vms/${vm.id}`);
       onRefresh();
     } catch (err: any) {
-      setActionError({ vmId: vm.id, error: `Delete failed: ${parseApiError(err)}` });
+      setActionError({ vmId: vm.id, error: `Delete failed: ${err.message}` });
     } finally {
       setActionInProgress((prev) => {
         const next = { ...prev };
@@ -346,6 +334,8 @@ export const VmsView: React.FC<VmsViewProps> = ({
             <option value="all">All Statuses</option>
             <option value="RUNNING">RUNNING</option>
             <option value="STOPPED">STOPPED</option>
+            <option value="EVACUATING">EVACUATING</option>
+            <option value="EVACUATION_FAILED">EVACUATION_FAILED</option>
             <option value="PENDING">PENDING</option>
             <option value="UNKNOWN">UNKNOWN</option>
             <option value="FAILED">FAILED</option>
@@ -397,6 +387,8 @@ export const VmsView: React.FC<VmsViewProps> = ({
               {filteredVms.map((vm) => {
                 const isRunning = vm.status === "RUNNING";
                 const isStopped = vm.status === "STOPPED";
+                const isEvacuating = vm.status === "EVACUATING";
+                const isEvacFailed = vm.status === "EVACUATION_FAILED";
                 const currentAction = actionInProgress[vm.id];
 
                 return (
@@ -410,48 +402,51 @@ export const VmsView: React.FC<VmsViewProps> = ({
                         <span style={{ fontSize: "14px" }}>{vm.name}</span>
                         {vm.ha && (
                           <span
-                            title="High Availability Workload"
                             style={{
                               fontSize: "10px",
-                              fontWeight: 700,
-                              padding: "1px 5px",
-                              borderRadius: "3px",
-                              backgroundColor: "rgba(24, 201, 167, 0.15)",
-                              color: "var(--accent-jade)",
-                              border: "1px solid rgba(24, 201, 167, 0.3)",
+                              fontWeight: 800,
+                              padding: "1px 6px",
+                              borderRadius: "4px",
+                              backgroundColor: "rgba(22, 138, 98, 0.18)",
+                              color: "var(--color-emerald-green, #168a62)",
+                              border: "1px solid rgba(22, 138, 98, 0.35)",
+                              letterSpacing: "0.5px",
                             }}
                           >
                             HA
                           </span>
                         )}
-                        {vm.recovery_time_s != null && (
+                        {vm.cgroups ? (
                           <span
-                            title={`Recovered by auto-evacuation in ${vm.recovery_time_s}s`}
+                            title="cgroup v2 limits enforced"
                             style={{
                               fontSize: "10px",
-                              fontWeight: 600,
-                              padding: "1px 5px",
-                              borderRadius: "3px",
-                              backgroundColor: "rgba(59, 130, 246, 0.12)",
-                              color: "#3B82F6",
+                              fontWeight: 800,
+                              padding: "1px 6px",
+                              borderRadius: "4px",
+                              backgroundColor: "rgba(100, 149, 237, 0.18)",
+                              color: "#4a90e2",
+                              border: "1px solid rgba(100, 149, 237, 0.35)",
+                              letterSpacing: "0.5px",
                             }}
                           >
-                            Evacuated ({vm.recovery_time_s}s)
+                            ENFORCED
                           </span>
-                        )}
-                        {vm.evacuation_error && (
+                        ) : (
                           <span
-                            title={`Evacuation error: ${vm.evacuation_error}`}
+                            title="cgroup v2 limits not enforced"
                             style={{
                               fontSize: "10px",
-                              fontWeight: 600,
-                              padding: "1px 5px",
-                              borderRadius: "3px",
-                              backgroundColor: "var(--danger-subtle)",
-                              color: "var(--danger)",
+                              fontWeight: 700,
+                              padding: "1px 6px",
+                              borderRadius: "4px",
+                              backgroundColor: "rgba(146, 150, 168, 0.15)",
+                              color: "var(--text-muted)",
+                              border: "1px solid rgba(146, 150, 168, 0.25)",
+                              letterSpacing: "0.5px",
                             }}
                           >
-                            Evac Failed
+                            UNRESTRICTED
                           </span>
                         )}
                         <Info size={14} style={{ color: "var(--text-muted)" }} />
@@ -525,12 +520,20 @@ export const VmsView: React.FC<VmsViewProps> = ({
                               ? "rgba(22, 138, 98, 0.12)"
                               : isStopped
                               ? "rgba(185, 177, 165, 0.15)"
+                              : isEvacuating
+                              ? "rgba(255, 170, 0, 0.18)"
+                              : isEvacFailed
+                              ? "rgba(230, 83, 60, 0.18)"
                               : "var(--warning-subtle)",
                           color:
                             isRunning
                               ? "var(--color-emerald-green)"
                               : isStopped
                               ? "var(--text-muted)"
+                              : isEvacuating
+                              ? "#ffaa00"
+                              : isEvacFailed
+                              ? "#e6533c"
                               : "var(--warning)",
                           display: "inline-flex",
                           alignItems: "center",
@@ -542,7 +545,16 @@ export const VmsView: React.FC<VmsViewProps> = ({
                             width: "6px",
                             height: "6px",
                             borderRadius: "50%",
-                            backgroundColor: isRunning ? "var(--color-emerald-green)" : isStopped ? "var(--text-muted)" : "var(--warning)",
+                            backgroundColor:
+                              isRunning
+                                ? "var(--color-emerald-green)"
+                                : isStopped
+                                ? "var(--text-muted)"
+                                : isEvacuating
+                                ? "#ffaa00"
+                                : isEvacFailed
+                                ? "#e6533c"
+                                : "var(--warning)",
                           }}
                         />
                         <span>{vm.status}</span>
@@ -605,7 +617,7 @@ export const VmsView: React.FC<VmsViewProps> = ({
 
                         {/* Stop Button */}
                         <button
-                          onClick={() => setStopCandidate(vm)}
+                          onClick={() => handleStop(vm)}
                           disabled={isStopped || !!currentAction}
                           title="Stop VM"
                           style={{
@@ -782,100 +794,6 @@ export const VmsView: React.FC<VmsViewProps> = ({
         </div>
       )}
 
-      {/* VM Stop Confirmation Modal */}
-      {stopCandidate && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            backgroundColor: "rgba(16, 24, 39, 0.75)",
-            backdropFilter: "blur(6px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 100,
-            padding: "20px",
-          }}
-          onClick={() => setStopCandidate(null)}
-        >
-          <div
-            className="animate-fade-in"
-            style={{
-              width: "100%",
-              maxWidth: "480px",
-              backgroundColor: "var(--bg-surface)",
-              borderRadius: "var(--radius-xl)",
-              border: "1px solid var(--border)",
-              boxShadow: "var(--shadow-modal)",
-              padding: "28px",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "18px" }}>
-              <div
-                style={{
-                  width: "46px",
-                  height: "46px",
-                  borderRadius: "14px",
-                  backgroundColor: "var(--warning-subtle)",
-                  color: "var(--warning)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  border: "1px solid var(--warning)",
-                }}
-              >
-                <Square size={22} />
-              </div>
-              <div>
-                <h3 style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary)", fontFamily: "var(--font-heading)" }}>
-                  Confirm MicroVM Shutdown
-                </h3>
-                <p style={{ fontSize: "12.5px", color: "var(--text-muted)" }}>
-                  Orderly ACPI powerdown with SIGTERM/SIGKILL escalation
-                </p>
-              </div>
-            </div>
-
-            <p style={{ fontSize: "13.5px", color: "var(--text-secondary)", marginBottom: "20px", lineHeight: 1.6 }}>
-              Are you sure you want to shut down microVM <strong>{stopCandidate.name}</strong> (<code>{stopCandidate.id}</code>) on worker node{" "}
-              <strong>{stopCandidate.node_id}</strong>? If running, the worker agent will send an ACPI shutdown trigger, followed by SIGTERM and SIGKILL if the guest does not halt.
-            </p>
-
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
-              <button
-                onClick={() => setStopCandidate(null)}
-                style={{
-                  padding: "9px 18px",
-                  borderRadius: "var(--radius-md)",
-                  border: "1px solid var(--border)",
-                  backgroundColor: "transparent",
-                  color: "var(--text-secondary)",
-                  fontSize: "13px",
-                  fontWeight: 600,
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleStop(stopCandidate)}
-                style={{
-                  padding: "9px 20px",
-                  borderRadius: "var(--radius-md)",
-                  border: "none",
-                  backgroundColor: "var(--warning)",
-                  color: "#0A1428",
-                  fontSize: "13px",
-                  fontWeight: 700,
-                }}
-              >
-                Confirm Shutdown
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* VM Details Inspection Modal */}
       {detailCandidate && (
         <div
@@ -973,36 +891,17 @@ export const VmsView: React.FC<VmsViewProps> = ({
                   {new Date(detailCandidate.created_at * 1000).toLocaleString()}
                 </span>
               </div>
-              <div>
-                <span style={{ color: "var(--text-muted)", display: "block" }}>High Availability (HA)</span>
-                <strong style={{ color: detailCandidate.ha ? "var(--accent-jade)" : "var(--text-muted)", fontSize: "13px" }}>
-                  {detailCandidate.ha ? "Enabled (Auto-evacuate on failure)" : "Disabled (Standard)"}
-                </strong>
-              </div>
-              {detailCandidate.recovery_time_s != null && (
-                <div>
-                  <span style={{ color: "var(--text-muted)", display: "block" }}>Failover Recovery Time</span>
-                  <strong style={{ color: "var(--primary)", fontFamily: "var(--font-mono)", fontSize: "13px" }}>
-                    {detailCandidate.recovery_time_s.toFixed(2)} seconds
+              <div style={{ gridColumn: "1 / -1" }}>
+                <span style={{ color: "var(--text-muted)", display: "block" }}>cgroup v2 Limits</span>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "2px" }}>
+                  <strong style={{ color: detailCandidate.cgroups ? "var(--color-emerald-green)" : "var(--text-muted)", fontSize: "13px" }}>
+                    {detailCandidate.cgroups ? "Enforced" : "Unrestricted"}
                   </strong>
-                </div>
-              )}
-              {detailCandidate.evacuation_error && (
-                <div style={{ gridColumn: "span 2" }}>
-                  <span style={{ color: "var(--danger)", display: "block" }}>Evacuation Error</span>
-                  <span style={{ color: "var(--danger)", fontSize: "12px", fontFamily: "var(--font-mono)" }}>
-                    {detailCandidate.evacuation_error}
-                  </span>
-                </div>
-              )}
-              <div style={{ gridColumn: "span 2", borderTop: "1px solid var(--border)", paddingTop: "12px", marginTop: "4px" }}>
-                <span style={{ color: "var(--text-muted)", display: "block", marginBottom: "4px", fontWeight: 700, fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  Linux cgroups v2 Resource Governance
-                </span>
-                <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", fontSize: "12px", fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>
-                  <span>CPU Max: <strong>{detailCandidate.cgroup_limits?.cpu_quota ? `${detailCandidate.cgroup_limits.cpu_quota}us / ${detailCandidate.cgroup_limits.cpu_period || 100000}us` : `${detailCandidate.vcpus * 100000}us / 100000us (${detailCandidate.vcpus * 100}%)`}</strong></span>
-                  <span>Memory Max: <strong>{detailCandidate.cgroup_limits?.memory_max_bytes ? `${Math.round(detailCandidate.cgroup_limits.memory_max_bytes / 1024 / 1024)} MiB` : `${detailCandidate.memory_mb + 256} MiB`}</strong></span>
-                  <span>PIDs Max: <strong>{detailCandidate.cgroup_limits?.pids_max || 512}</strong></span>
+                  {detailCandidate.cgroup_limits && (
+                    <span style={{ fontSize: "11px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>
+                      mem: {Math.round((detailCandidate.cgroup_limits.memory_max_bytes || 0) / (1024 * 1024))}MB · cpu: {((detailCandidate.cgroup_limits.cpu_quota || 0) / (detailCandidate.cgroup_limits.cpu_period || 100000)).toFixed(2)} cores · pids: {detailCandidate.cgroup_limits.pids_max}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>

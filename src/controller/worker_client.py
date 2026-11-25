@@ -71,9 +71,9 @@ class WorkerClient:
     def get_vm(self, worker_vm_id):
         return self._req("GET", f"/vms/{worker_vm_id}")
 
-    def create_vm(self, name, vcpus, memory_mb, disk_gb, start=True):
+    def create_vm(self, name, vcpus, memory_mb, disk_gb, start=True, image="ubuntu-24-04"):
         body = {"name": name, "vcpus": vcpus, "memory_mb": memory_mb,
-                "disk_gb": disk_gb, "start": start}
+                "disk_gb": disk_gb, "start": start, "image": image}
         return self._req("POST", "/vms", json=body, timeout=60.0)
 
     def start_vm(self, worker_vm_id):

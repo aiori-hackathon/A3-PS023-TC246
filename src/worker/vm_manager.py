@@ -17,6 +17,7 @@ from cgroup_manager import CgroupManager
 
 LAB = Path.home() / "ps023" / "lab"
 VM_ROOT = Path(os.environ.get("PS023_VM_ROOT", str(Path.home() / "ps023" / "vms")))
+IMAGES_DIR = Path(os.environ.get("PS023_IMAGES_DIR", str(Path.home() / "ps023" / "images")))
 BASE_IMAGE = Path(os.environ.get("PS023_BASE_IMAGE", str(LAB / "images" / "ubuntu-noble.raw")))
 KERNEL = Path(os.environ.get("PS023_KERNEL", str(LAB / "kernel" / "vmlinux.bin")))
 CH_BIN = "cloud-hypervisor"
@@ -26,6 +27,114 @@ GATEWAY = f"{SUBNET}.1"
 SLOT_START = int(os.environ.get("PS023_SLOT_START", "0"))
 SLOT_COUNT = int(os.environ.get("PS023_SLOT_COUNT", "8"))
 GIB = 1024 ** 3
+
+IMAGE_CATALOG = {
+    "ubuntu-24-04": {
+        "filename": "ubuntu-noble.raw",
+        "alt_filename": "ubuntu-24-04.raw",
+        "root_device": "/dev/vda1",
+        "root_flags": "rw",
+        "default_user": "ubuntu",
+        "ssh_user": "ubuntu",
+        "min_memory_mb": 512,
+        "disk_gb": 4,
+        "cmdline_extra": "",
+        "boot_mode": "direct",
+    },
+    "debian-12": {
+        "filename": "debian-12.raw",
+        "root_device": "/dev/vda1",
+        "root_flags": "rw",
+        "default_user": "debian",
+        "ssh_user": "debian",
+        "min_memory_mb": 512,
+        "disk_gb": 4,
+        "cmdline_extra": "",
+        "boot_mode": "direct",
+    },
+    "arch-linux": {
+        "filename": "arch-linux.raw",
+        "root_device": "/dev/vda3",
+        "root_flags": "rw",
+        "default_user": "arch",
+        "ssh_user": "arch",
+        "min_memory_mb": 512,
+        "disk_gb": 4,
+        "cmdline_extra": "",
+        "boot_mode": "direct",
+    },
+    "fedora-40": {
+        "filename": "fedora-40.raw",
+        "root_device": "/dev/vda4",
+        "root_flags": "rootflags=subvol=root rw",
+        "default_user": "fedora",
+        "ssh_user": "fedora",
+        "min_memory_mb": 1024,
+        "disk_gb": 10,
+        "cmdline_extra": "",
+        "boot_mode": "direct",
+    },
+    "almalinux-9": {
+        "filename": "almalinux-9.raw",
+        "root_device": "/dev/vda4",
+        "root_flags": "rw",
+        "default_user": "almalinux",
+        "ssh_user": "almalinux",
+        "min_memory_mb": 1024,
+        "disk_gb": 10,
+        "cmdline_extra": "",
+        "boot_mode": "direct",
+    },
+    "rocky-9": {
+        "filename": "rocky-9.raw",
+        "root_device": "/dev/vda4",
+        "root_flags": "rw",
+        "default_user": "rocky",
+        "ssh_user": "rocky",
+        "min_memory_mb": 1024,
+        "disk_gb": 10,
+        "cmdline_extra": "",
+        "boot_mode": "direct",
+    },
+    "opensuse-15-6": {
+        "filename": "opensuse-15-6.raw",
+        "root_device": "/dev/vda3",
+        "root_flags": "rw",
+        "default_user": "opensuse",
+        "ssh_user": "opensuse",
+        "min_memory_mb": 1024,
+        "disk_gb": 10,
+        "cmdline_extra": "",
+        "boot_mode": "direct",
+        "rename_nic": False,
+    },
+    "alpine-3-20": {
+        "filename": "alpine-3-20.raw",
+        "root_device": "/dev/vda",
+        "root_flags": "rw",
+        "default_user": "alpine",
+        "ssh_user": "alpine",
+        "min_memory_mb": 256,
+        "disk_gb": 2,
+        "cmdline_extra": "",
+        "boot_mode": "direct",
+        "rename_nic": True,
+    },
+    "cirros-0-6-2": {
+        "filename": "cirros-0-6-2.raw",
+        "alt_filename": "cirros-0.6.2-x86_64-disk.img",
+        "initrd": "cirros-initrd.img",
+        "root_device": "/dev/vda1",
+        "root_flags": "ro",
+        "default_user": "cirros",
+        "ssh_user": "cirros",
+        "min_memory_mb": 128,
+        "disk_gb": 1,
+        "cmdline_extra": "",
+        "boot_mode": "direct",
+        "rename_nic": True,
+    },
+}
 
 
 class VMError(Exception):
@@ -88,11 +197,55 @@ class VMManager:
                 return s
         raise VMError("no free slot (all TAP/IP slots are in use)")
 
-    def create(self, name, vcpus, memory_mb, disk_gb=4):
+    def resolve_image(self, image_id: str | None = None) -> tuple[Path, dict]:
+        if not image_id or image_id == "default":
+            image_id = "ubuntu-24-04"
+
+        # Explicitly reject directory traversal and absolute/relative path attempts
+        if "/" in image_id or "\\" in image_id or ".." in image_id or os.path.isabs(image_id):
+            raise VMError(f"invalid image id '{image_id}': path traversal not allowed")
+
+        if image_id not in IMAGE_CATALOG:
+            raise VMError(f"unknown image '{image_id}': not in allowlist catalog")
+
+        spec = IMAGE_CATALOG[image_id]
+        candidates = []
+        if "filename" in spec:
+            candidates.append(IMAGES_DIR / spec["filename"])
+            candidates.append(LAB / "images" / spec["filename"])
+        if "alt_filename" in spec:
+            candidates.append(IMAGES_DIR / spec["alt_filename"])
+            candidates.append(LAB / "images" / spec["alt_filename"])
+        candidates.append(IMAGES_DIR / f"{image_id}.raw")
+        candidates.append(LAB / "images" / f"{image_id}.raw")
+
+        # Fallback to BASE_IMAGE for ubuntu-24-04
+        if image_id == "ubuntu-24-04":
+            candidates.append(BASE_IMAGE)
+
+        target = None
+        for cand in candidates:
+            if cand.exists() and cand.is_file():
+                target = cand
+                break
+
+        if target is None:
+            raise VMError(f"base image missing for '{image_id}'")
+
+        initrd_path = None
+        if "initrd" in spec:
+            for cand_dir in [IMAGES_DIR, LAB / "images"]:
+                cand_initrd = cand_dir / spec["initrd"]
+                if cand_initrd.exists() and cand_initrd.is_file():
+                    initrd_path = cand_initrd
+                    break
+
+        return target, spec, initrd_path
+
+    def create(self, name, vcpus, memory_mb, disk_gb=4, image="ubuntu-24-04"):
         if vcpus < 1 or memory_mb < 128 or disk_gb < 1:
             raise VMError("invalid resources")
-        if not BASE_IMAGE.exists():
-            raise VMError(f"base image missing: {BASE_IMAGE}")
+        img_path, img_spec, img_initrd = self.resolve_image(image)
         if not KERNEL.exists():
             raise VMError(f"kernel missing: {KERNEL}")
         with self._lock:
@@ -109,9 +262,17 @@ class VMManager:
                 "tap": tap, "mac": f"12:34:56:78:90:{slot:02x}",
                 "ip": f"{SUBNET}.{10 + slot}", "created_at": time.time(),
                 "cgroups": False, "cgroup_limits": None,
+                "image": image,
+                "root_device": img_spec.get("root_device", "/dev/vda1"),
+                "root_flags": img_spec.get("root_flags", "rw"),
+                "default_user": img_spec.get("default_user", "ubuntu"),
+                "cmdline_extra": img_spec.get("cmdline_extra", ""),
+                "boot_mode": img_spec.get("boot_mode", "direct"),
+                "rename_nic": img_spec.get("rename_nic", True),
+                "initrd": str(img_initrd) if img_initrd else None,
             }
             try:
-                subprocess.run(["cp", "--reflink=auto", str(BASE_IMAGE),
+                subprocess.run(["cp", "--reflink=auto", "--sparse=always", str(img_path),
                                 str(d / "disk.raw")], check=True)
                 if disk_gb * GIB > (d / "disk.raw").stat().st_size:
                     os.truncate(d / "disk.raw", disk_gb * GIB)
@@ -126,37 +287,93 @@ class VMManager:
         password = os.environ.get("PS023_VM_PASSWORD")
         if not password:
             raise VMError("PS023_VM_PASSWORD is not set")
-        user_data = "\n".join([
-            "#cloud-config",
-            f"hostname: {meta['name']}",
-            "users:",
+        def_user = meta.get("default_user") or "ubuntu"
+
+        # Check for ssh public key to inject
+        ssh_pubkey = None
+        for kpath in [Path.home() / ".ssh" / "id_rsa.pub", Path.home() / ".ssh" / "id_ed25519.pub", Path.home() / ".ssh" / "authorized_keys"]:
+            if kpath.exists():
+                try:
+                    raw_k = kpath.read_text().strip()
+                    if raw_k:
+                        ssh_pubkey = raw_k.splitlines()[0].strip()
+                        break
+                except Exception:
+                    pass
+
+        users_lines = [
             "  - name: rajyavardhan",
-            "    groups: [sudo]",
+            "    groups: [sudo, wheel]",
             "    shell: /bin/bash",
             "    sudo: ALL=(ALL) NOPASSWD:ALL",
             "    lock_passwd: false",
             f"    plain_text_passwd: {json.dumps(password)}",
+        ]
+        if ssh_pubkey:
+            users_lines.append(f"    ssh_authorized_keys:\n      - {ssh_pubkey}")
+
+        if def_user != "rajyavardhan":
+            users_lines.extend([
+                f"  - name: {def_user}",
+                "    groups: [sudo, wheel]",
+                "    shell: /bin/bash",
+                "    sudo: ALL=(ALL) NOPASSWD:ALL",
+                "    lock_passwd: false",
+                f"    plain_text_passwd: {json.dumps(password)}",
+            ])
+            if ssh_pubkey:
+                users_lines.append(f"    ssh_authorized_keys:\n      - {ssh_pubkey}")
+
+        ud_sections = [
+            "#cloud-config",
+            f"hostname: {meta['name']}",
+            "users:",
+            *users_lines,
             "ssh_pwauth: true",
             "chpasswd:",
             "  expire: false",
-            "",
-        ])
+        ]
+        if meta.get("image") == "arch-linux" or def_user == "arch":
+            ud_sections.extend([
+                "bootcmd:",
+                "  - systemctl mask systemd-time-wait-sync.service || true",
+                "runcmd:",
+                "  - systemctl mask systemd-time-wait-sync.service || true",
+            ])
+        elif not meta.get("rename_nic", True):
+            ud_sections.extend([
+                "write_files:",
+                "  - path: /etc/sysconfig/network/routes",
+                "    content: |",
+                f"      default {GATEWAY} - -",
+                "runcmd:",
+                f"  - ip route replace default via {GATEWAY} dev eth0 || true",
+            ])
+        ud_sections.append("")
+        user_data = "\n".join(ud_sections)
         meta_data = f"instance-id: {meta['id']}\nlocal-hostname: {meta['name']}\n"
-        network = "\n".join([
+        if ssh_pubkey:
+            meta_data += f"public-keys: {ssh_pubkey}\n"
+        rename_nic = meta.get("rename_nic", True)
+        net_lines = [
             "version: 2",
             "ethernets:",
             "  nic0:",
             "    match:",
             f"      macaddress: \"{meta['mac']}\"",
-            "    set-name: ens3",
+        ]
+        if rename_nic:
+            net_lines.append("    set-name: ens3")
+        net_lines.extend([
             f"    addresses: [{meta['ip']}/24]",
             "    routes:",
-            "      - to: default",
+            "      - to: 0.0.0.0/0",
             f"        via: {GATEWAY}",
             "    nameservers:",
             "      addresses: [1.1.1.1, 8.8.8.8]",
             "",
         ])
+        network = "\n".join(net_lines)
         seed = d / "seed.img"
         with open(seed, "wb") as f:
             f.truncate(2 * 1024 * 1024)
@@ -223,10 +440,21 @@ class VMManager:
     # ---------- start ----------
     def _config(self, meta):
         d = self._dir(meta["id"])
+        root_dev = meta.get("root_device") or "/dev/vda1"
+        root_flags = meta.get("root_flags") or "rw"
+        extra = meta.get("cmdline_extra") or ""
+        cmdline = f"console=ttyS0 root={root_dev} {root_flags}"
+        if extra:
+            cmdline += f" {extra}"
+
+        payload = {"kernel": str(KERNEL), "cmdline": cmdline}
+        if meta.get("initrd") and Path(meta["initrd"]).exists():
+            payload["initramfs"] = str(meta["initrd"])
+
         return {
             "cpus": {"boot_vcpus": meta["vcpus"], "max_vcpus": meta["vcpus"]},
             "memory": {"size": meta["memory_mb"] * 1024 * 1024},
-            "payload": {"kernel": str(KERNEL), "cmdline": CMDLINE},
+            "payload": payload,
             "disks": [
                 {"path": str(d / "disk.raw"), "image_type": "Raw"},
                 {"path": str(d / "seed.img"), "image_type": "Raw",

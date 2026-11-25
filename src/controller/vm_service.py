@@ -1,6 +1,8 @@
 """VM operations: placement, worker calls, and bookkeeping."""
 import json
+import subprocess
 import threading
+from pathlib import Path
 
 import database as db
 import node_service as ns
@@ -10,7 +12,87 @@ from worker_client import WorkerClient, WorkerError, WorkerUnreachable
 _place_lock = threading.Lock()
 
 
+def stage_image_for_node_b(image_id: str, db_path: str = None) -> bool:
+    """Ensure image is available on Node B, syncing on-demand from Node A with free-space safety check."""
+    if not image_id or image_id == "ubuntu-24-04":
+        return True
+
+    node_b = db.get_node("node-b", db_path)
+    if node_b and (node_b.get("backend") == "azure" or "8012" in node_b.get("url", "") or "10.100.0." in node_b.get("url", "")):
+        return False
+
+    img = db.get_image(image_id, db_path)
+    if not img or not img.get("path"):
+        return False
+
+    src_file = Path(img["path"])
+    if not src_file.exists():
+        return False
+
+    filename = src_file.name
+    node_b_host = "192.168.100.17"
+    node_b_user = "rajyavardhan"
+    node_b_dest_dir = f"/home/{node_b_user}/nested/images"
+
+    # Check if already present on Node B
+    check_cmd = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
+                 f"{node_b_user}@{node_b_host}", f"test -f {node_b_dest_dir}/{filename}"]
+    if subprocess.run(check_cmd, capture_output=True).returncode == 0:
+        return True
+
+    # Check Node B free disk space (df -m /)
+    df_cmd = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
+              f"{node_b_user}@{node_b_host}", "df -m / | awk 'NR==2 {print $4}'"]
+    proc = subprocess.run(df_cmd, capture_output=True, text=True)
+    try:
+        free_mb = int(proc.stdout.strip())
+    except Exception:
+        free_mb = 0
+
+    # Evict unused images if free space is below 3000 MB
+    if free_mb < 3000:
+        vms = db.list_vms(db_path)
+        active_b_images = {v["image"] for v in vms if v.get("node_id") == "node-b" and v.get("image")}
+        ls_cmd = ["ssh", "-o", "BatchMode=yes", f"{node_b_user}@{node_b_host}", f"ls {node_b_dest_dir}"]
+        out = subprocess.run(ls_cmd, capture_output=True, text=True).stdout.split()
+        for f in out:
+            if f != "ubuntu-noble.raw" and not any(f.startswith(img_id) for img_id in active_b_images):
+                subprocess.run(["ssh", "-o", "BatchMode=yes", f"{node_b_user}@{node_b_host}", f"rm -f {node_b_dest_dir}/{f}"])
+
+    # Perform sparse sync
+    rsync_cmd = ["rsync", "-S", "--timeout=120", str(src_file), f"{node_b_user}@{node_b_host}:{node_b_dest_dir}/{filename}"]
+    res = subprocess.run(rsync_cmd, capture_output=True, text=True)
+    if res.returncode != 0:
+        return False
+
+    # Sync initrd if present
+    if img.get("initrd_path"):
+        initrd_file = Path(img["initrd_path"])
+        if initrd_file.exists():
+            subprocess.run(["rsync", "-S", "--timeout=60", str(initrd_file), f"{node_b_user}@{node_b_host}:{node_b_dest_dir}/{initrd_file.name}"])
+
+    return True
+
+
+def cleanup_unused_image_on_node_b(image_id: str, db_path: str = None):
+    """Evict a staged non-base image from Node B if no active VMs on Node B are using it."""
+    if not image_id or image_id == "ubuntu-24-04":
+        return
+    vms = db.list_vms(db_path)
+    still_in_use = any(v.get("node_id") == "node-b" and v.get("image") == image_id for v in vms)
+    if not still_in_use:
+        img = db.get_image(image_id, db_path)
+        if img and img.get("path"):
+            fname = Path(img["path"]).name
+            subprocess.run(["ssh", "-o", "BatchMode=yes", "rajyavardhan@192.168.100.17",
+                            f"rm -f /home/rajyavardhan/nested/images/{fname}"], capture_output=True)
+
+
 class NotFound(Exception):
+    pass
+
+
+class ImageNotStaged(Exception):
     pass
 
 
@@ -71,9 +153,23 @@ def create_vm(name, vcpus, memory_mb, disk_gb=4, path=None,
                               user_data=user_data, tags=tags)
             db.record_decision(decision, vm_id, path)
 
+        if node["id"] == "node-b":
+            if node.get("backend") == "azure" or "8012" in node.get("url", "") or "10.100.0." in node.get("url", ""):
+                if image and image != "ubuntu-24-04":
+                    db.delete_vm(vm_id, path)
+                    raise ImageNotStaged(f"image '{image}' is not staged on Azure node B (only ubuntu-24-04 is available)")
+            else:
+                try:
+                    stage_image_for_node_b(image, path)
+                except Exception:
+                    pass
+
         client = WorkerClient(node["id"], node["url"])
         try:
-            wvm = client.create_vm(name, vcpus, memory_mb, disk_gb)
+            try:
+                wvm = client.create_vm(name, vcpus, memory_mb, disk_gb, image=image)
+            except TypeError:
+                wvm = client.create_vm(name, vcpus, memory_mb, disk_gb)
         except WorkerUnreachable:
             # NOTE: after a timeout the worker may have created the VM anyway.
             # The row is dropped here; a later reconcile step removes orphans.
@@ -154,6 +250,11 @@ def delete_vm(vm_id, path=None):
         if e.status != 404:  # 404 means the worker no longer has it: fine
             raise
     db.delete_vm(vm_id, path)
+    if vm.get("node_id") == "node-b" and vm.get("image"):
+        try:
+            cleanup_unused_image_on_node_b(vm["image"], path)
+        except Exception:
+            pass
 
 
 def get_vm(vm_id, path=None):

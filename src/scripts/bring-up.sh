@@ -5,6 +5,7 @@ LOG=$P/logs
 VENV=$P/.venv/bin
 SECRETS=$P/secrets.env
 NODEB=192.168.100.17
+AZURE_NODE="${AZURE_NODE:-0}"
 mkdir -p "$LOG"
 
 [ -f "$SECRETS" ] || { echo "missing $SECRETS"; exit 1; }
@@ -13,6 +14,144 @@ for v in PS023_VM_PASSWORD PS023_API_TOKEN PS023_TOKEN_NODE_A PS023_TOKEN_NODE_B
   [ -n "${!v}" ] || { echo "$v is empty in $SECRETS"; exit 1; }
 done
 step() { echo; echo "=== $*"; }
+
+try_azure_node_b() {
+  echo "Evaluating Azure Node B setup (AZURE_NODE=$AZURE_NODE)..."
+
+  # 1. Check az login
+  if ! az account show >/dev/null 2>&1; then
+    echo "Azure CLI is not authenticated ('az account show' failed)."
+    return 1
+  fi
+  echo "Azure CLI authenticated."
+
+  AZURE_RG="${AZURE_RG:-rg-ps023}"
+  AZURE_VM="${AZURE_VM:-ps023-node-b}"
+  AZURE_NSG="${AZURE_NSG:-nsg-ps023}"
+
+  # 2. Check VM power state
+  POWER_STATE=$(az vm get-instance-view -g "$AZURE_RG" -n "$AZURE_VM" --query "instanceView.statuses[?starts_with(code, 'PowerState/')].displayStatus" -o tsv 2>/dev/null || true)
+  echo "Azure VM '$AZURE_VM' power state: ${POWER_STATE:-unknown}"
+
+  # 3. Read public IP
+  AZURE_PUB_IP=$(az vm show -d -g "$AZURE_RG" -n "$AZURE_VM" --query publicIps -o tsv 2>/dev/null || true)
+  echo "Azure VM public IP: ${AZURE_PUB_IP:-none}"
+
+  # 4. Read host public IP and compare with NSG rule Allow-SSH-Caller
+  CALLER_IP=$(curl -s -m 5 https://api.ipify.org || curl -s -m 5 https://ifconfig.me || true)
+  ALLOWED_PREFIX=$(az network nsg rule show -g "$AZURE_RG" --nsg-name "$AZURE_NSG" -n "Allow-SSH-Caller" --query sourceAddressPrefix -o tsv 2>/dev/null || true)
+  echo "Caller IP: $CALLER_IP | NSG Allow-SSH-Caller: $ALLOWED_PREFIX"
+
+  # Dry run check
+  if [ "${AZURE_DRY_RUN:-0}" = "1" ]; then
+    echo
+    echo "=== [DRY RUN] Azure Mode Evaluation ==="
+    echo "  - az login: OK"
+    echo "  - VM PowerState: $POWER_STATE"
+    if [ "$POWER_STATE" != "VM running" ]; then
+      echo "  - Action required in live mode: Prompt user 'Start Azure VM $AZURE_VM now? [y/N]' (timeout 5m)"
+    fi
+    echo "  - VM Public IP: $AZURE_PUB_IP"
+    if [ "$ALLOWED_PREFIX" = "$CALLER_IP/32" ] || [ "$ALLOWED_PREFIX" = "$CALLER_IP" ]; then
+      echo "  - NSG Allow-SSH-Caller: MATCH ($ALLOWED_PREFIX)"
+    else
+      echo "  - NSG Allow-SSH-Caller: MISMATCH ($ALLOWED_PREFIX vs $CALLER_IP/32) -> would prompt to update rule"
+    fi
+    echo "  - Transport: SSH tunnel on port 8012 (TUNNEL_MODE=ssh)"
+    echo "  - Node B URL: http://127.0.0.1:8012"
+    echo "  - Outer nested VMM: SKIPPED (not needed for Azure)"
+    echo "=== [DRY RUN] Completed. No cloud VM started. ==="
+    return 0
+  fi
+
+  # Live power state check
+  if [ "$POWER_STATE" != "VM running" ]; then
+    read -r -p "Azure VM '$AZURE_VM' is $POWER_STATE. Start it now? [y/N]: " CONFIRM_START
+    case "$CONFIRM_START" in
+      [yY]|[yY][eE][sS])
+        echo "Starting Azure VM '$AZURE_VM' (timeout 300s)..."
+        az vm start -g "$AZURE_RG" -n "$AZURE_VM" --no-wait
+        WAITED=0
+        while [ $WAITED -lt 300 ]; do
+          PSTATE=$(az vm get-instance-view -g "$AZURE_RG" -n "$AZURE_VM" --query "instanceView.statuses[?starts_with(code, 'PowerState/')].displayStatus" -o tsv 2>/dev/null || true)
+          if [ "$PSTATE" = "VM running" ]; then
+            echo "Azure VM '$AZURE_VM' is running (started in ${WAITED}s)."
+            break
+          fi
+          sleep 5
+          WAITED=$((WAITED + 5))
+        done
+        if [ "$PSTATE" != "VM running" ]; then
+          echo "ERROR: Timed out waiting for Azure VM '$AZURE_VM' to start."
+          return 1
+        fi
+        ;;
+      *)
+        echo "User declined starting Azure VM '$AZURE_VM'."
+        return 1
+        ;;
+    esac
+  fi
+
+  # NSG rule update check
+  if [ -n "$CALLER_IP" ] && [ "$ALLOWED_PREFIX" != "$CALLER_IP/32" ] && [ "$ALLOWED_PREFIX" != "$CALLER_IP" ]; then
+    read -r -p "Update NSG rule Allow-SSH-Caller to $CALLER_IP/32? [y/N]: " CONFIRM_NSG
+    case "$CONFIRM_NSG" in
+      [yY]|[yY][eE][sS])
+        echo "Updating NSG rule Allow-SSH-Caller..."
+        az network nsg rule update -g "$AZURE_RG" --nsg-name "$AZURE_NSG" -n "Allow-SSH-Caller" --source-address-prefixes "$CALLER_IP/32" >/dev/null
+        echo "NSG rule updated to $CALLER_IP/32."
+        ;;
+      *)
+        echo "Skipping NSG update."
+        ;;
+    esac
+  fi
+
+  # Transport setup
+  if [ "${WIREGUARD:-0}" = "1" ]; then
+    echo "Using WireGuard transport to Azure Node B..."
+    NODEB="10.100.0.2"
+    NODE_B_URL="http://$NODEB:8002"
+    ip link show wg0 >/dev/null 2>&1 || { echo "ERROR: wg0 not found. Run: sudo wg-quick up wg0"; return 1; }
+    sudo ip route replace 192.168.200.0/24 dev wg0 2>/dev/null || true
+  else
+    echo "Using SSH tunnel transport to Azure Node B..."
+    NODE_B_URL="http://127.0.0.1:8012"
+    pkill -f '8012:127.0.0.1:8002' 2>/dev/null || true
+    sleep 1
+    ssh -o ExitOnForwardFailure=yes \
+        -o ServerAliveInterval=15 \
+        -o ServerAliveCountMax=3 \
+        -o StrictHostKeyChecking=accept-new \
+        -N -f -L 8012:127.0.0.1:8002 "ubuntu@${AZURE_PUB_IP}"
+
+    if [ -x "$VENV/sshuttle" ] && ! pgrep -f 'sshuttle.*192\.168\.200\.0' >/dev/null 2>&1; then
+      echo "Starting sshuttle for Azure guest subnet 192.168.200.0/24..."
+      sudo "$VENV/sshuttle" -D -e "ssh -o StrictHostKeyChecking=accept-new" -r "ubuntu@${AZURE_PUB_IP}" 192.168.200.0/24 2>/dev/null || true
+    fi
+  fi
+
+  # Worker health check
+  echo "Checking worker B health at $NODE_B_URL/health..."
+  for i in $(seq 1 15); do
+    if curl -s -m 2 "$NODE_B_URL/health" | grep -q "node-b"; then
+      echo "worker B (Azure) ok"
+      return 0
+    fi
+    sleep 2
+  done
+
+  echo "worker B (Azure) failed health check at $NODE_B_URL/health."
+  return 1
+}
+
+# If dry run requested, run Azure evaluation directly and exit
+if [ "${AZURE_DRY_RUN:-0}" = "1" ]; then
+  try_azure_node_b
+  exit 0
+fi
+
 sudo -v || exit 1
 
 step "1. host network"
@@ -36,50 +175,62 @@ if sudo iptables -S DOCKER-USER >/dev/null 2>&1; then
 fi
 echo "bridge and $(ip -br link show master br-ps023 | wc -l) TAP devices ready"
 
-step "2. node-b setup"
-if [ "${TUNNEL_MODE:-}" = "ssh" ]; then
-  NODE_B_URL="http://127.0.0.1:8012"
-  echo "SSH tunnel mode active. Connecting to Node B via $NODE_B_URL..."
+AZURE_ACTIVE=0
+if [ "$AZURE_NODE" = "auto" ] || [ "$AZURE_NODE" = "1" ]; then
+  step "2. azure node-b setup"
+  if try_azure_node_b; then
+    AZURE_ACTIVE=1
+  else
+    echo "Azure Node B bring-up unsuccessful. Falling back automatically to local nested Node B..."
+  fi
+fi
 
-  step "3. node-b worker health check"
-  for i in $(seq 1 10); do curl -s -m 2 http://127.0.0.1:8012/health | grep -q node-b && break; sleep 1; done
-  curl -s -m 3 http://127.0.0.1:8012/health | grep -q node-b || { echo "worker B not answering at http://127.0.0.1:8012/health; check ssh tunnel"; exit 1; }
-  echo "worker B (ssh tunnel) ok"
+if [ "$AZURE_ACTIVE" = "0" ]; then
+  if [ "${TUNNEL_MODE:-}" = "ssh" ]; then
+    NODE_B_URL="http://127.0.0.1:8012"
+    echo "SSH tunnel mode active. Connecting to Node B via $NODE_B_URL..."
 
-  step "4. route to cloud guest network"
-  echo "guest network 192.168.200.0/24 routed via sshuttle"
-elif [ "${AZURE_HYBRID:-0}" = "1" ] || [ "${AWS_HYBRID:-0}" = "1" ]; then
-  NODEB=10.100.0.2
-  NODE_B_URL="http://$NODEB:8002"
-  echo "Cloud hybrid mode active. Connecting to Node B at $NODEB:8002 via WireGuard..."
-  ip link show wg0 >/dev/null 2>&1 || { echo "ERROR: wg0 interface is not active. Run: sudo wg-quick up wg0"; exit 1; }
-  for i in $(seq 1 10); do ping -c 1 -W 2 "$NODEB" >/dev/null 2>&1 && break; sleep 1; done
-  ping -c 1 -W 2 "$NODEB" >/dev/null 2>&1 || { echo "ERROR: Cannot ping Node B at $NODEB over WireGuard."; exit 1; }
+    step "3. node-b worker health check"
+    for i in $(seq 1 10); do curl -s -m 2 http://127.0.0.1:8012/health | grep -q node-b && break; sleep 1; done
+    curl -s -m 3 http://127.0.0.1:8012/health | grep -q node-b || { echo "worker B not answering at http://127.0.0.1:8012/health; check ssh tunnel"; exit 1; }
+    echo "worker B (ssh tunnel) ok"
 
-  step "3. node-b worker health check"
-  for i in $(seq 1 10); do curl -s -m 2 http://$NODEB:8002/health | grep -q node-b && break; sleep 1; done
-  curl -s -m 3 http://$NODEB:8002/health | grep -q node-b || { echo "worker B not answering at http://$NODEB:8002/health"; exit 1; }
-  echo "worker B (cloud) ok"
+    step "4. route to cloud guest network"
+    echo "guest network 192.168.200.0/24 routed via sshuttle"
+  elif [ "${AZURE_HYBRID:-0}" = "1" ] || [ "${AWS_HYBRID:-0}" = "1" ]; then
+    NODEB=10.100.0.2
+    NODE_B_URL="http://$NODEB:8002"
+    echo "Cloud hybrid mode active. Connecting to Node B at $NODEB:8002 via WireGuard..."
+    ip link show wg0 >/dev/null 2>&1 || { echo "ERROR: wg0 interface is not active. Run: sudo wg-quick up wg0"; exit 1; }
+    for i in $(seq 1 10); do ping -c 1 -W 2 "$NODEB" >/dev/null 2>&1 && break; sleep 1; done
+    ping -c 1 -W 2 "$NODEB" >/dev/null 2>&1 || { echo "ERROR: Cannot ping Node B at $NODEB over WireGuard."; exit 1; }
 
-  step "4. route to cloud guest network"
-  sudo ip route replace 192.168.200.0/24 dev wg0 2>/dev/null || true
-else
-  NODE_B_URL="http://$NODEB:8002"
-  bash "$P/outer/start-outer.sh"
-  nb() { SSHPASS="$PS023_VM_PASSWORD" sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o ServerAliveInterval=10 rajyavardhan@$NODEB "$@"; }
-  for i in $(seq 1 30); do nb true 2>/dev/null && break; sleep 2; done
-  nb hostname || { echo "cannot ssh to node-b; see $P/outer/serial.log and vmm.log"; exit 1; }
+    step "3. node-b worker health check"
+    for i in $(seq 1 10); do curl -s -m 2 http://$NODEB:8002/health | grep -q node-b && break; sleep 1; done
+    curl -s -m 3 http://$NODEB:8002/health | grep -q node-b || { echo "worker B not answering at http://$NODEB:8002/health"; exit 1; }
+    echo "worker B (cloud) ok"
 
-  step "3. node-b inner network and worker"
-  nb 'bash -s' < "$P/outer/inner-net.sh" >/dev/null || { echo "inner network setup failed"; exit 1; }
-  nb 'bash -s' < "$P/outer/start-worker.sh" >/dev/null 2>&1
-  for i in $(seq 1 20); do curl -s -m 2 http://$NODEB:8002/health | grep -q node-b && break; sleep 1; done
-  curl -s -m 3 http://$NODEB:8002/health | grep -q node-b || { echo "worker B not answering; run: nb 'tail -n 20 ~/worker.log'"; exit 1; }
-  echo "worker B ok"
+    step "4. route to cloud guest network"
+    sudo ip route replace 192.168.200.0/24 dev wg0 2>/dev/null || true
+  else
+    step "2. local nested node-b setup"
+    NODE_B_URL="http://$NODEB:8002"
+    bash "$P/outer/start-outer.sh"
+    nb() { SSHPASS="$PS023_VM_PASSWORD" sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o ServerAliveInterval=10 rajyavardhan@$NODEB "$@"; }
+    for i in $(seq 1 30); do nb true 2>/dev/null && break; sleep 2; done
+    nb hostname || { echo "cannot ssh to node-b; see $P/outer/serial.log and vmm.log"; exit 1; }
 
-  step "4. route to the inner network"
-  sudo ip route replace 10.77.0.0/24 via $NODEB
-  ip route show 10.77.0.0/24
+    step "3. node-b inner network and worker"
+    nb 'bash -s' < "$P/outer/inner-net.sh" >/dev/null || { echo "inner network setup failed"; exit 1; }
+    nb 'bash -s' < "$P/outer/start-worker.sh" >/dev/null 2>&1
+    for i in $(seq 1 20); do curl -s -m 2 http://$NODEB:8002/health | grep -q node-b && break; sleep 1; done
+    curl -s -m 3 http://$NODEB:8002/health | grep -q node-b || { echo "worker B not answering; run: nb 'tail -n 20 ~/worker.log'"; exit 1; }
+    echo "worker B ok"
+
+    step "4. route to the inner network"
+    sudo ip route replace 10.77.0.0/24 via $NODEB
+    ip route show 10.77.0.0/24
+  fi
 fi
 
 step "5. worker A and controller on the host"
@@ -108,6 +259,7 @@ for i in $(seq 1 20); do
   sleep 2
 done
 echo "nodes: $N"
-echo "host VMMs: $(pgrep -fc '[c]loud-hypervisor') (1 expected: node-b)"
+EXPECTED_VMMS=$([ "$AZURE_ACTIVE" = "1" ] && echo "0 expected (Node B on Azure)" || echo "1 expected: node-b")
+echo "host VMMs: $(pgrep -fc '[c]loud-hypervisor') ($EXPECTED_VMMS)"
 echo
 echo "READY. Logs are in $LOG. Run a test with: bash ~/ps023/with-secrets.sh bash ~/ps023/controller/try_api.sh"

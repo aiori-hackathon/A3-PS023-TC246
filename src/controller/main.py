@@ -133,6 +133,11 @@ def on_node_unavailable(request, exc):
     return JSONResponse(status_code=503, content={"detail": str(exc)})
 
 
+@app.exception_handler(svc.ImageNotStaged)
+def on_image_not_staged(request, exc):
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+
 @app.exception_handler(svc.WorkerRejected)
 def on_worker_rejected(request, exc):
     return JSONResponse(status_code=502, content={"detail": str(exc)})
@@ -382,9 +387,16 @@ def scheduler_preview(req: SchedulerPreviewRequest):
 
 
 # ---------- Images ----------
+import image_evaluator
+
 @app.get("/images", dependencies=auth)
 def list_images():
-    return db.list_images()
+    matrix_records = image_evaluator.load_boot_matrix()
+    k_sha = image_evaluator.get_kernel_sha256()
+    return [
+        image_evaluator.enrich_image_status(img, matrix_records=matrix_records, current_kernel_sha256=k_sha)
+        for img in db.list_images()
+    ]
 
 
 @app.get("/images/{image_id}", dependencies=auth)
@@ -392,7 +404,9 @@ def get_image(image_id: ImageId):
     img = db.get_image(image_id)
     if not img:
         raise HTTPException(status_code=404, detail=f"unknown image {image_id}")
-    return img
+    matrix_records = image_evaluator.load_boot_matrix()
+    k_sha = image_evaluator.get_kernel_sha256()
+    return image_evaluator.enrich_image_status(img, matrix_records=matrix_records, current_kernel_sha256=k_sha)
 
 
 @app.post("/images/import", status_code=201, dependencies=auth)

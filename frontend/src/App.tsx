@@ -12,7 +12,6 @@ import { ImagesView } from "./views/ImagesView";
 import { TerminalsView } from "./views/TerminalsView";
 import { DecisionsView } from "./views/DecisionsView";
 import { EventsView } from "./views/EventsView";
-import { FailoverView } from "./views/FailoverView";
 import { SettingsView } from "./views/SettingsView";
 
 import { Node, VM, OSImage, Decision, EventItem, getToken, initAuth, api } from "./api";
@@ -20,7 +19,7 @@ import { Node, VM, OSImage, Decision, EventItem, getToken, initAuth, api } from 
 export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<NavTab>(() => {
     const hash = window.location.hash.replace(/^#\/?/, "").split("?")[0];
-    const validTabs: NavTab[] = ["explore", "overview", "vms", "nodes", "images", "terminals", "decisions", "events", "failover", "settings"];
+    const validTabs: NavTab[] = ["explore", "overview", "vms", "nodes", "images", "terminals", "decisions", "events", "settings"];
     if (validTabs.includes(hash as NavTab)) return hash as NavTab;
     return "explore";
   });
@@ -73,7 +72,7 @@ export const App: React.FC = () => {
     if (!hash) return;
 
     const [tabPart, queryPart] = hash.split("?");
-    const validTabs: NavTab[] = ["explore", "overview", "vms", "nodes", "images", "terminals", "decisions", "events", "failover", "settings"];
+    const validTabs: NavTab[] = ["explore", "overview", "vms", "nodes", "images", "terminals", "decisions", "events", "settings"];
     if (validTabs.includes(tabPart as NavTab)) {
       setCurrentTab(tabPart as NavTab);
     }
@@ -83,6 +82,9 @@ export const App: React.FC = () => {
       const vmId = params.get("vm_id");
       if (vmId) {
         setTerminalTargetVmId(vmId);
+      }
+      if (params.get("create") === "true") {
+        setCreateModalOpen(true);
       }
     }
   }, []);
@@ -277,17 +279,6 @@ export const App: React.FC = () => {
               {currentTab === "events" && (
                 <EventsView
                   events={events}
-                  onRefresh={fetchData}
-                />
-              )}
-
-              {currentTab === "failover" && (
-                <FailoverView
-                  decisions={decisions}
-                  events={events}
-                  vms={vms}
-                  nodes={nodes}
-                  onOpenTerminal={handleOpenTerminal}
                 />
               )}
 

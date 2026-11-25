@@ -17,6 +17,8 @@ export interface Node {
   vms_running: number;
   last_heartbeat: number | null;
   cgroups_enabled?: boolean;
+  backend?: "azure" | "local-nested" | "local" | string;
+  display_label?: string;
 }
 
 export interface NodeMetricSample {
@@ -76,7 +78,6 @@ export interface VM {
   image?: string;
   ha?: boolean;
   evacuation_error?: string | null;
-  evacuation_retries?: number;
   recovery_time_s?: number | null;
   cgroups?: boolean;
   cgroup_limits?: {
@@ -103,7 +104,6 @@ export interface Decision {
   requested_mb: number;
   selected: string | null;
   reason: string;
-  policy?: string;
   candidates: Candidate[];
 }
 
@@ -133,6 +133,8 @@ export interface OSImage {
   kernel_compat?: "COMPATIBLE" | "INCOMPATIBLE_BTRFS" | "REQUIRES_CONVERSION" | string;
   notes?: string | null;
   created_at: number;
+  node_status?: Record<string, string>;
+  badge?: string;
 }
 
 export interface CandidatePreview {
@@ -242,6 +244,26 @@ export async function api<T>(method: string, path: string, body?: any): Promise<
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("vmc:auth-unauthorized"));
     }
+    const detail = data && data.detail;
+    const msg = typeof detail === "string" ? detail : "Please connect using your API token in the top bar.";
+    throw new Error(`Authentication Required (401): ${msg}`);
+  }
+
+  if (res.status === 422) {
+    let msg = "Invalid parameters.";
+    if (data && data.detail) {
+      if (Array.isArray(data.detail)) {
+        msg = data.detail.map((d: any) => {
+          if (d.loc && d.loc.includes("name")) {
+            return `VM name '${d.input}' is invalid: must be lowercase alphanumeric with hyphens (^[a-z0-9][a-z0-9-]{0,30}$)`;
+          }
+          return d.msg || JSON.stringify(d);
+        }).join("; ");
+      } else if (typeof data.detail === "string") {
+        msg = data.detail;
+      }
+    }
+    throw new Error(`Validation Error (422): ${msg}`);
   }
 
   if (!res.ok) {

@@ -230,3 +230,30 @@ def test_slot_exhaustion_and_reuse(mgr, monkeypatch):
         mgr._free_slot()
     shutil.rmtree(vmm.VM_ROOT / "vm-aaaaaaaa")
     assert mgr._free_slot() == 0
+
+
+def test_image_allowlist_and_traversal_rejection(mgr):
+    # Reject directory traversal
+    with pytest.raises(vmm.VMError, match="path traversal not allowed"):
+        mgr.resolve_image("../../etc/passwd")
+
+    with pytest.raises(vmm.VMError, match="path traversal not allowed"):
+        mgr.create("test-vm", 1, 512, 4, image="../../etc/passwd")
+
+    # Reject absolute paths
+    with pytest.raises(vmm.VMError, match="path traversal not allowed"):
+        mgr.resolve_image("/etc/passwd")
+
+    with pytest.raises(vmm.VMError, match="path traversal not allowed"):
+        mgr.create("test-vm", 1, 512, 4, image="/etc/shadow")
+
+    # Reject unknown image outside catalog allowlist
+    with pytest.raises(vmm.VMError, match="not in allowlist catalog"):
+        mgr.resolve_image("custom-untrusted-distro")
+
+    # Default image resolves to ubuntu-24-04 if file exists or raises base image missing
+    # Verify allowlist lookup succeeds for known images when present
+    assert "ubuntu-24-04" in vmm.IMAGE_CATALOG
+    assert "debian-12" in vmm.IMAGE_CATALOG
+    assert "arch-linux" in vmm.IMAGE_CATALOG
+

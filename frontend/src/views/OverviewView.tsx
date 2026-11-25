@@ -14,7 +14,6 @@ import {
   Clock,
   Terminal,
   ShieldCheck,
-  ShieldAlert,
   RefreshCw,
   BarChart3,
 } from "lucide-react";
@@ -60,11 +59,6 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   const stoppedVms = vms.filter((v) => v.status === "STOPPED");
   const failedVms = vms.filter((v) => v.status === "FAILED" || v.status === "UNKNOWN");
   const healthyNodes = nodes.filter((n) => n.status === "HEALTHY");
-  const haVms = vms.filter((v) => v.ha);
-  const latestRecoveryTime = vms.reduce<number | null>(
-    (latest, v) => (v.recovery_time_s != null ? Math.max(latest ?? 0, v.recovery_time_s) : latest),
-    null
-  );
 
   const totalPhysicalMemMb = nodes.reduce((acc, n) => acc + (n.memory_total_mb || 0), 0);
   const totalSchedulableMb = nodes.reduce((acc, n) => acc + (n.memory_schedulable_mb || 0), 0);
@@ -92,7 +86,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
     const sched = n.memory_schedulable_mb || 0;
     const available = Math.max(0, sched - reserved);
     return {
-      name: n.id,
+      name: n.id === "node-b" ? (n.display_label || (n.backend === "azure" ? "worker-b (Azure)" : "worker-b (local nested)")) : (n.display_label || n.id),
       Reserved: reserved,
       Available: available,
       Schedulable: sched,
@@ -251,55 +245,6 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           </div>
           <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "4px" }}>
             Committed: {(totalReservedMb / 1024).toFixed(1)} GiB
-          </div>
-        </motion.div>
-
-        {/* HA Resiliency */}
-        <motion.div
-          whileHover={{ y: -2 }}
-          style={{
-            backgroundColor: "var(--bg-surface)",
-            padding: "20px",
-            borderRadius: "var(--radius-xl)",
-            border: "1px solid var(--border)",
-            boxShadow: "var(--shadow-sm)",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", color: "var(--primary)", marginBottom: "8px" }}>
-            <span style={{ fontSize: "12px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>HA Workloads</span>
-            <ShieldCheck size={18} />
-          </div>
-          <div style={{ fontSize: "30px", fontWeight: 800, color: "var(--text-primary)", fontFamily: "var(--font-heading)" }}>
-            {haVms.length} <span style={{ fontSize: "16px", fontWeight: 500, color: "var(--text-muted)" }}>/ {vms.length}</span>
-          </div>
-          <div style={{ fontSize: "12px", color: haVms.length > 0 ? "var(--primary)" : "var(--text-muted)", marginTop: "4px" }}>
-            {haVms.length > 0 ? "Zero-operator auto-evacuate active" : "Standard non-HA"}
-          </div>
-        </motion.div>
-
-        {/* Failover Recovery Time */}
-        <motion.div
-          whileHover={{ y: -2 }}
-          onClick={() => onNavigate("failover")}
-          style={{
-            backgroundColor: "var(--bg-surface)",
-            padding: "20px",
-            borderRadius: "var(--radius-xl)",
-            border: "1px solid var(--border)",
-            boxShadow: "var(--shadow-sm)",
-            cursor: "pointer",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", color: "var(--warning)", marginBottom: "8px" }}>
-            <span style={{ fontSize: "12px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>Last Recovery</span>
-            <ShieldAlert size={18} />
-          </div>
-          <div style={{ fontSize: "28px", fontWeight: 800, color: latestRecoveryTime ? "var(--primary)" : "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
-            {latestRecoveryTime ? `${latestRecoveryTime.toFixed(2)}s` : "no failover"}
-          </div>
-          <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "4px", display: "flex", alignItems: "center", gap: "4px" }}>
-            <span>{latestRecoveryTime ? "View failover audit" : "no failover events yet"}</span>
-            <ArrowRight size={12} />
           </div>
         </motion.div>
       </div>

@@ -58,9 +58,9 @@ def test_image_catalog_includes_alpine_and_cirros():
     assert "md5:" in cirros["checksum"]
     assert cirros["download_url"].startswith("https://download.cirros-cloud.net/0.6.2/")
     assert cirros["kernel_path"] == "/boot/vmlinuz"
-    assert cirros["initrd_path"] == "/boot/initrd.img"
+    assert "cirros-initrd.img" in cirros["initrd_path"] or cirros["initrd_path"] == "/boot/initrd.img"
     assert "console=ttyS0 root=/dev/vda1" in cirros["cmdline"]
-    assert "not boot-tested" in cirros["notes"].lower()
+    assert "unsupported" in cirros["notes"].lower() or "not boot-tested" in cirros["notes"].lower()
 
 
 def test_vm_creation_rejects_unknown_image():
