@@ -27,6 +27,7 @@ VM_ID = re.compile(r"^vm-[0-9a-f]{8}$")
 MAX_SESSIONS = 5
 HELLO_TIMEOUT_S = 10
 SSH_CONNECT_TIMEOUT_S = 10
+SSH_RETRY_TIMEOUT_S = float(os.environ.get("PS023_SSH_RETRY_TIMEOUT_S", 20.0))
 _active = 0
 _session_lock = asyncio.Lock()
 
@@ -102,12 +103,30 @@ async def _relay(ws, ip, password, hello, vm=None):
                 pass
     if not user:
         user = "ubuntu"
-    try:
-        conn = await asyncssh.connect(
-            ip, username=user, password=password, known_hosts=KNOWN_HOSTS_PATH,
-            connect_timeout=SSH_CONNECT_TIMEOUT_S)
-    except (OSError, asyncssh.Error, asyncio.TimeoutError) as e:
-        await ws.close(code=4502, reason="ssh failed: " + type(e).__name__)
+    conn = None
+    deadline = asyncio.get_event_loop().time() + SSH_RETRY_TIMEOUT_S
+    last_err = None
+    while True:
+        try:
+            conn = await asyncssh.connect(
+                ip, username=user, password=password, known_hosts=KNOWN_HOSTS_PATH,
+                connect_timeout=SSH_CONNECT_TIMEOUT_S)
+            break
+        except ConnectionRefusedError as e:
+            last_err = e
+            if asyncio.get_event_loop().time() >= deadline:
+                break
+            await asyncio.sleep(1.0)
+        except (OSError, asyncssh.Error, asyncio.TimeoutError) as e:
+            last_err = e
+            if isinstance(e, ConnectionRefusedError) and asyncio.get_event_loop().time() < deadline:
+                await asyncio.sleep(1.0)
+                continue
+            break
+
+    if not conn:
+        err_msg = type(last_err).__name__ if last_err else "Timeout"
+        await ws.close(code=4502, reason="ssh failed: " + err_msg)
         return
     try:
         proc = await conn.create_process(
