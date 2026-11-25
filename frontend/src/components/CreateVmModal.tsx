@@ -50,12 +50,40 @@ export const CreateVmModal: React.FC<CreateVmModalProps> = ({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [createdResult, setCreatedResult] = useState<any | null>(null);
 
+  // Helper to determine whether an image is verified & available to boot
+  const isImageValid = (img: any) => {
+    if (!img) return false;
+    const isUnsupported =
+      img.status === "UNSUPPORTED" ||
+      (img.node_status &&
+        Object.values(img.node_status).every(
+          (s: any) => typeof s === "string" && s.startsWith("UNSUPPORTED")
+        ));
+    const isUnavailable =
+      img.status === "UNAVAILABLE" ||
+      (img.node_status &&
+        Object.values(img.node_status).every(
+          (s: any) => typeof s === "string" && s.startsWith("UNAVAILABLE")
+        ));
+    const isReady =
+      img.status === "AVAILABLE" ||
+      img.status === "READY" ||
+      (img.node_status &&
+        Object.values(img.node_status).some((s: any) => s === "READY"));
+    return (
+      Boolean(isReady) &&
+      !isUnsupported &&
+      !isUnavailable &&
+      img.kernel_compat !== "INCOMPATIBLE_BTRFS"
+    );
+  };
+
   // Auto-set image if default not available or incompatible
   useEffect(() => {
     if (images.length > 0) {
       const cur = images.find((i) => i.id === selectedImage);
-      if (!cur || cur.status !== "AVAILABLE" || cur.kernel_compat === "INCOMPATIBLE_BTRFS") {
-        const firstReady = images.find((i) => i.status === "AVAILABLE" && i.kernel_compat !== "INCOMPATIBLE_BTRFS");
+      if (!isImageValid(cur)) {
+        const firstReady = images.find(isImageValid);
         if (firstReady) setSelectedImage(firstReady.id);
       }
     }
@@ -124,9 +152,7 @@ export const CreateVmModal: React.FC<CreateVmModalProps> = ({
   };
 
   const currentImgObj = images.find((i) => i.id === selectedImage);
-  const isImageAvailable =
-    currentImgObj?.status === "AVAILABLE" &&
-    currentImgObj?.kernel_compat !== "INCOMPATIBLE_BTRFS";
+  const isImageAvailable = isImageValid(currentImgObj);
 
   const stepsList = [
     { num: 1, label: "OS & Image" },
@@ -237,7 +263,7 @@ export const CreateVmModal: React.FC<CreateVmModalProps> = ({
                       display: "flex",
                       alignItems: "center",
                       gap: "8px",
-                      cursor: isPassed ? "pointer" : "default",
+                      cursor: isPassed || (s.num === 2 && isImageAvailable) ? "pointer" : "default",
                       opacity: isActive ? 1 : isPassed ? 0.85 : 0.45,
                     }}
                   >
